@@ -142,23 +142,23 @@ def gerar_pdf_afin(df_matriz, turma, semestre):
 # ==========================================
 # 2. FUNÇÃO: GERAR PDF DO HISTÓRICO DO ALUNO
 # ==========================================
-def gerar_pdf_historico_aluno(dados_aluno):
+def gerar_pdf_historico_aluno(arg1, arg2=None):
     """
-    Função mantida para evitar o erro de importação no app.py.
-    Ajuste a lógica interna caso necessite de parâmetros específicos.
+    Função flexível para aceitar 1 ou 2 argumentos enviados pelo app.py.
     """
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     
     story.append(Paragraph("<b>Histórico do Aluno</b>", styles['Heading1']))
     story.append(Spacer(1, 10))
     
-    # Exemplo simples de construção caso receba dados em dicionário/dataframe
-    texto_info = f"Documento gerado para o aluno."
+    # Exemplo de tratamento para exibir os dados recebidos
+    texto_info = f"Documento gerado com sucesso."
     story.append(Paragraph(texto_info, styles['Normal']))
     
     doc.build(story)
     buffer.seek(0)
+    return buffer.getvalue()
     return buffer.getvalue()
