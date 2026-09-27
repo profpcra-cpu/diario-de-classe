@@ -32,7 +32,7 @@ def executar_query(query, params=None, fetch=True):
         cursor.close()
         conexao.close()
 
-# --- FUNÇÃO PARA GERAR O PDF DO HISTÓRICO ESCOLAR EM MEMÓRIA (COM CORREÇÃO DE SEGURANÇA) ---
+# --- FUNÇÃO PARA GERAR O PDF DO HISTÓRICO ESCOLAR (LENDO DA TB_DIARIO) ---
 def gerar_pdf_historico_aluno(dados_aluno, df_historico):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -109,9 +109,9 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
     elements.append(t_ident)
     elements.append(Spacer(1, 0.1 * cm))
 
-    # Tabela Curricular com Tratamento Seguro de Notas
+    # Tabela Curricular baseada nas colunas reais da TB_DIARIO
     header_comp = [
-        Paragraph("<b>Componente Curricular (IDUC)</b>", cell_bold),
+        Paragraph("<b>Componente Curricular (Unidade Curricular)</b>", cell_bold),
         Paragraph("<b>Semestre</b>", cell_center_bold),
         Paragraph("<b>C/H</b>", cell_center_bold),
         Paragraph("<b>Módulo</b>", cell_center_bold),
@@ -125,19 +125,13 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
         components_data.append([Paragraph("Sem registos curriculares", cell_style), Paragraph("-", cell_center), Paragraph("-", cell_center), Paragraph("-", cell_center), Paragraph("-", cell_center), Paragraph("-", cell_center)])
     else:
         for _, row in df_historico.iterrows():
-            soma_val = str(row.get('soma', 0)).strip()
-            try:
-                nota_num = float(soma_val) if soma_val and soma_val != '.' else 0.0
-            except ValueError:
-                nota_num = 0.0
-
             components_data.append([
-                Paragraph(str(row.get('iduc', '')), cell_style),
-                Paragraph(str(row.get('turma', '')), cell_center),
-                Paragraph("50", cell_center),
-                Paragraph("Teoria", cell_center),
-                Paragraph("0", cell_center),
-                Paragraph("AP" if nota_num >= 5 else "AF", cell_center)
+                Paragraph(str(row.get('unidade_curricular', '')), cell_style),
+                Paragraph(str(row.get('semestre', '')), cell_center),
+                Paragraph(str(row.get('carga_horaria', '')), cell_center),
+                Paragraph(str(row.get('modulo', '')), cell_center),
+                Paragraph(str(row.get('faltas', '')), cell_center),
+                Paragraph(str(row.get('conceito', '')), cell_center)
             ])
 
     t_comp = Table(components_data, colWidths=[9.0 * cm, 2.5 * cm, 1.5 * cm, 2.0 * cm, 1.5 * cm, 1.5 * cm])
@@ -395,9 +389,9 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
         with tab2:
             st.markdown("### Controlo de Presenças com Colunas Dinâmicas de Datas")
             try:
-                df_alunos = executar_query(f"SELECT matrícula, turma FROM TB_AVALIACOES WHERE turma = '{turma_diario}' LIMIT 30")
+                df_alunos = executar_query(f"SELECT matricula, turma FROM TB_DIARIO WHERE turma = '{turma_diario}' LIMIT 30")
                 if df_alunos.empty:
-                    df_alunos = executar_query("SELECT matrícula, turma FROM TB_AVALIACOES LIMIT 20")
+                    df_alunos = executar_query("SELECT matricula, turma FROM TB_DIARIO LIMIT 20")
                 
                 try:
                     df_datas = executar_query(f"SELECT DISTINCT data FROM TB_DIARIO WHERE turma = '{turma_diario}'")
@@ -405,7 +399,7 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
                 except:
                     lista_datas = [str(date.today())]
                     
-                df_matriz_freq = df_alunos[['matrícula', 'turma']].copy()
+                df_matriz_freq = df_alunos[['matricula', 'turma']].copy()
                 for d in lista_datas:
                     df_matriz_freq[f"Aula: {d}"] = True
                     
@@ -448,11 +442,12 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                             st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
                             
                     with aba_historico:
-                        st.markdown("### Histórico Curricular e Notas Associadas")
-                        df_historico_aluno = executar_query("SELECT * FROM TB_AVALIACOES WHERE matrícula = %s", params=(matricula_busca,))
+                        st.markdown("### Histórico Curricular e Notas Associadas (TB_DIARIO)")
+                        # ATUALIZADO: Agora busca diretamente na TB_DIARIO onde está a matricula do aluno
+                        df_historico_aluno = executar_query("SELECT * FROM TB_DIARIO WHERE matricula = %s", params=(matricula_busca,))
                         
                         if df_historico_aluno.empty:
-                            st.info("Não existem registos de notas ou histórico curricular para este aluno.")
+                            st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
                         else:
                             st.dataframe(df_historico_aluno, use_container_width=True)
                             
