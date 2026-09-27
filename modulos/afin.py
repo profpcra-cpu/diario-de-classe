@@ -4,7 +4,7 @@ from modulos.conexao import executar_query
 
 def renderizar_modulo_afin():
     st.subheader("📊 AFIN - Acompanhamento da Frequência e Conceito")
-    st.markdown("Matriz consolidada por Turma e Semestre, cruzando Faltas (`FAL`) e Conceito (`CON`) por Unidade Curricular.")
+    st.markdown("Matriz consolidada por Turma e Semestre, cruzando Faltas e Conceitos por Unidade Curricular.")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -14,7 +14,7 @@ def renderizar_modulo_afin():
 
     if st.button("🔍 Carregar Matriz AFIN"):
         try:
-            # 1. Buscar os dados da TB_DIARIO
+            # 1. Buscar os dados garantindo que pegamos nas colunas corretas da TB_DIARIO
             query_diario = """
                 SELECT matricula, iduc, unidade_curricular, faltas, conceito 
                 FROM TB_DIARIO 
@@ -33,20 +33,19 @@ def renderizar_modulo_afin():
                     df_pessoas = df_diario[['matricula']].drop_duplicates()
                     df_pessoas['nome'] = "Aluno " + df_pessoas['matricula']
 
-                # 3. Pivotar separadamente as faltas e os conceitos por IDUC
+                # 3. Pivotar separadamente com tratamento para evitar misturar colunas
                 df_faltas = df_diario.pivot(index='matricula', columns='iduc', values='faltas')
-                df_faltas.columns = [f"{col} - FAL" for col in df_faltas.columns]
+                df_faltas.columns = [f"{col} - FALTAS" for col in df_faltas.columns]
 
                 df_conceitos = df_diario.pivot(index='matricula', columns='iduc', values='conceito')
-                df_conceitos.columns = [f"{col} - CON" for col in df_conceitos.columns]
+                df_conceitos.columns = [f"{col} - CONCEITO" for col in df_conceitos.columns]
 
-                # 4. Juntar alunos, faltas e conceitos pivotados
+                # 4. Consolidar na tabela final por aluno
                 df_matriz = df_pessoas.drop_duplicates(subset=['matricula']).set_index('matricula')
                 df_matriz = df_matriz.join(df_faltas).join(df_conceitos).reset_index()
 
                 st.success(f"Matriz AFIN gerada com sucesso para a turma {turma_selecionada}!")
                 
-                # Exibição do editor interativo
                 st.markdown("### Tabela de Lançamento (Editável)")
                 df_editado = st.data_editor(df_matriz, use_container_width=True, key="editor_tabela_afin_matriz")
 
