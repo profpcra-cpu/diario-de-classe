@@ -6,7 +6,14 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """Gera o PDF do Histórico Escolar do Aluno."""
+    """
+    Gera o PDF do Histórico Escolar do Aluno.
+    Garante compatibilidade caso os parâmetros venham invertidos (dicionário vs dataframe).
+    """
+    # Proteção caso a ordem dos argumentos tenha sido invertida na chamada
+    if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
+        df_historico, dados_aluno = dados_aluno, df_historico
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -29,11 +36,21 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         spaceAfter=15
     )
     
+    # Extrair nome e matrícula de forma segura (seja dicionário ou série)
+    nome_aluno = ""
+    matricula_aluno = ""
+    if isinstance(dados_aluno, dict):
+        nome_aluno = dados_aluno.get('nome', '')
+        matricula_aluno = dados_aluno.get('matricula', '')
+    elif hasattr(dados_aluno, 'iloc') and not dados_aluno.empty:
+        nome_aluno = str(dados_aluno.iloc[0].get('nome', ''))
+        matricula_aluno = str(dados_aluno.iloc[0].get('matricula', ''))
+
     story.append(Paragraph("CEP ESCOLA TÉCNICA DE PLANALTINA - HISTÓRICO ESCOLAR", titulo_style))
-    story.append(Paragraph(f"Aluno: {dados_aluno.get('nome', '')} | Matrícula: {dados_aluno.get('matricula', '')}", sub_style))
+    story.append(Paragraph(f"Aluno: {nome_aluno} | Matrícula: {matricula_aluno}", sub_style))
     story.append(Spacer(1, 10))
     
-    if not df_historico.empty:
+    if df_historico is not None and not df_historico.empty:
         headers = list(df_historico.columns)
         dados_tabela = [headers]
         for _, row in df_historico.iterrows():
@@ -61,7 +78,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     """Gera o PDF consolidado da Matriz AFIN em formato paisagem perfeitamente estruturado."""
     buffer = io.BytesIO()
-    # Margens estreitas (15mm / ~42 pontos) para otimizar o espaço horizontal da folha em paisagem
     doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
     
@@ -112,21 +128,16 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
         fontName='Helvetica'
     )
 
-    # Largura total útil disponível em paisagem (Letter landscape = 792 pt largura - 50 pt margens = 742 pt)
     largura_total = 742
     larg_matr = 65
     larg_nome = 175
     
-    # Calcular quantas disciplinas existem na matriz
-    colunas_originais = list(df_matriz.columns)
-    num_disciplinas = (len(colunas_originais) - 2) // 2
+    colunas_originais = list(df_matriz.columns) if df_matriz is not None and not df_matriz.empty else []
+    num_disciplinas = max(1, (len(colunas_originais) - 2) // 2)
     
-    if num_disciplinas > 0:
-        larg_restante = largura_total - (larg_matr + larg_nome)
-        larg_dupla = larg_restante / num_disciplinas
-        larg_col_uc = larg_dupla / 2.0
-    else:
-        larg_col_uc = 25
+    larg_restante = largura_total - (larg_matr + larg_nome)
+    larg_dupla = larg_restante / num_disciplinas
+    larg_col_uc = larg_dupla / 2.0
 
     # 1. Cabeçalho Institucional Superior (Faixa Azul)
     tabela_topo = Table([
@@ -144,7 +155,7 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     story.append(tabela_topo)
     story.append(Spacer(1, 4))
 
-    # 2. Informações de Semestre e Turma (Faixa Amarela Suave)
+    # 2. Informações de Semestre e Turma
     tabela_info = Table([
         [Paragraph(f"SEMESTRE: {semestre}", estilo_info), Paragraph(f"TURMA: {turma}", estilo_info)]
     ], colWidths=[largura_total / 2.0, largura_total / 2.0])
@@ -189,17 +200,17 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
 
     dados_tabela = [header_linha_disc, header_linha_iduc, header_linha_tipo]
 
-    # Preenchimento das linhas dos estudantes
-    for _, row in df_matriz.iterrows():
-        linha_dados = [
-            Paragraph(str(row.iloc[0]), estilo_td),
-            Paragraph(str(row.iloc[1]), estilo_td_nome)
-        ]
-        for col_idx in range(2, len(row)):
-            val = row.iloc[col_idx]
-            val_str = str(val) if pd.notnull(val) and str(val) != 'nan' else ""
-            linha_dados.append(Paragraph(val_str, estilo_td))
-        dados_tabela.append(linha_dados)
+    if df_matriz is not None:
+        for _, row in df_matriz.iterrows():
+            linha_dados = [
+                Paragraph(str(row.iloc[0]), estilo_td),
+                Paragraph(str(row.iloc[1]), estilo_td_nome)
+            ]
+            for col_idx in range(2, len(row)):
+                val = row.iloc[col_idx]
+                val_str = str(val) if pd.notnull(val) and str(val) != 'nan' else ""
+                linha_dados.append(Paragraph(val_str, estilo_td))
+            dados_tabela.append(linha_dados)
 
     tabela_matriz = Table(dados_tabela, repeatRows=3, colWidths=col_widths)
     
