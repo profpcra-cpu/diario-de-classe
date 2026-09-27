@@ -273,10 +273,53 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                     
                     with aba_ficha:
                         st.markdown("### Informações Pessoais e Cadastrais do Estudante")
-                        df_ficha_editada = st.data_editor(df_dados_pessoais, use_container_width=True, key=f"ficha_{matricula_busca}")
                         
-                        if st.button("💾 Guardar Alterações Cadastrais"):
-                            st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
+                        # Extrair dados do aluno para exibir em formato de formulário limpo
+                        aluno_info = df_dados_pessoais.iloc[0].to_dict()
+                        
+                        with st.form(key=f"form_ficha_{matricula_busca}"):
+                            col_f1, col_f2 = st.columns(2)
+                            
+                            with col_f1:
+                                novo_nome = st.text_input("Nome Completo:", value=str(aluno_info.get('nome', '')))
+                                nova_turma = st.text_input("Turma:", value=str(aluno_info.get('turma', '')))
+                                novo_sexo = st.text_input("Sexo:", value=str(aluno_info.get('sexo', '')))
+                                novo_cpf = st.text_input("CPF:", value=str(aluno_info.get('cpf', '')))
+                                
+                            with col_f2:
+                                novo_curso = st.text_input("Curso:", value=str(aluno_info.get('curso', '')))
+                                nova_sigla = st.text_input("Sigla:", value=str(aluno_info.get('sigla', '')))
+                                nova_dt_nasc = st.text_input("Data de Nascimento:", value=str(aluno_info.get('dt_nascimento', '')))
+                                novo_pai = st.text_input("Nome do Pai:", value=str(aluno_info.get('nome_do_pai', '')))
+                                
+                            submit_cadastral = st.form_submit_button("💾 Guardar Alterações Cadastrais")
+                            
+                            if submit_cadastral:
+                                try:
+                                    sql_upd_cad = """
+                                        UPDATE TB_PESSOAS 
+                                        SET nome = %s, turma = %s, sexo = %s, cpf = %s, curso = %s, sigla = %s, dt_nascimento = %s, nome_do_pai = %s 
+                                        WHERE matricula = %s
+                                    """
+                                    executar_query(
+                                        sql_upd_cad, 
+                                        params=(
+                                            novo_nome, 
+                                            nova_turma, 
+                                            novo_sexo, 
+                                            novo_cpf, 
+                                            novo_curso, 
+                                            nova_sigla, 
+                                            nova_dt_nasc, 
+                                            novo_pai, 
+                                            matricula_busca
+                                        ), 
+                                        fetch=False
+                                    )
+                                    st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao guardar alterações cadastrais: {e}")
                             
                     with aba_historico:
                         st.markdown("### Histórico Curricular e Notas Associadas (TB_DIARIO)")
