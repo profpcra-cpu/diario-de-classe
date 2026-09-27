@@ -42,23 +42,25 @@ def renderizar_modulo_afin():
                 df_faltas = df_diario.pivot(index='matricula', columns='iduc', values='faltas')
                 df_conceitos = df_diario.pivot(index='matricula', columns='iduc', values='conceito')
 
-                # 4. Construir um MultiIndex nas colunas: (Nome da Disciplina, 'FAL') e (Nome da Disciplina, 'CON')
-                colunas_multinivel = []
+                # 4. Construir colunas planas e limpas: "NOME DA UC - FAL" e "NOME DA UC - CON"
                 dfs_para_juntar = [df_pessoas.drop_duplicates(subset=['matricula']).set_index('matricula')]
 
                 for iduc in df_faltas.columns:
-                    nome_uc = mapa_nomes.get(iduc, iduc) # Se não achar o nome, usa o iduc
+                    nome_uc = mapa_nomes.get(iduc, iduc) # Nome descritivo da disciplina
                     
-                    # Adiciona ao dataframe temporário de colunas estruturadas
-                    dfs_para_juntar.append(df_faltas[[iduc]].rename(columns={iduc: (nome_uc, 'FAL')}))
-                    dfs_para_juntar.append(df_conceitos[[iduc]].rename(columns={iduc: (nome_uc, 'CON')}))
+                    # Renomeia as colunas com o formato legível
+                    df_f = df_faltas[[iduc]].rename(columns={iduc: f"{nome_uc} - FAL"})
+                    df_c = df_conceitos[[iduc]].rename(columns={iduc: f"{nome_uc} - CON"})
+                    
+                    dfs_para_juntar.append(df_f)
+                    dfs_para_juntar.append(df_c)
 
-                # Unir todos os blocos num único DataFrame com MultiIndex nas colunas
+                # Unir todos os blocos num único DataFrame limpo
                 df_matriz = pd.concat(dfs_para_juntar, axis=1).reset_index()
 
                 st.success(f"Matriz AFIN gerada com sucesso para a turma {turma_selecionada}!")
                 
-                # Exibição do editor interativo com suporte a MultiIndex
+                # Exibição do editor interativo com colunas limpas
                 st.markdown("### Tabela de Lançamento (Editável)")
                 df_editado = st.data_editor(df_matriz, use_container_width=True, key="editor_tabela_afin_matriz")
 
