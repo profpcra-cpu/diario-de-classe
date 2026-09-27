@@ -295,7 +295,7 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                                 st.info("Módulo de Declaração de Matrícula em desenvolvimento...")
                         with col_doc2:
                             dados_dict = df_dados_pessoais.iloc[0].to_dict()
-                            pdf_bytes = gerar_pdf_historico_aluno(dados_dict, df_historico_aluno)
+                            pdf_bytes = gerar_pdf_historico_aluno(df_historico_aluno, dados_dict)
                             
                             st.download_button(
                                 label="📜 Descarregar Histórico Escolar Oficial (PDF)",
