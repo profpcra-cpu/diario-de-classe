@@ -8,12 +8,10 @@ from reportlab.lib import colors
 
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """Gera o PDF do Histórico Escolar do Aluno rigorosamente idêntico ao modelo oficial com logotipos."""
-    # Proteção caso os argumentos venham invertidos
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
         df_historico, dados_aluno = dados_aluno, df_historico
 
     buffer = io.BytesIO()
-    # Margens ajustadas para documento retrato (Letter)
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
     
@@ -23,7 +21,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         'CabGov',
         parent=styles['Normal'],
         fontSize=8,
-        alignment=1, # Centralizado
+        alignment=1,
         textColor=colors.HexColor("#1A202C"),
         fontName='Helvetica-Bold',
         spaceAfter=1
@@ -82,7 +80,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         fontName='Helvetica'
     )
 
-    # 1. Carregamento seguro dos logotipos (se disponíveis no diretório raiz do projeto)
     path_logo_gdf = "logo_gdf.png"
     path_logo_escola = "logo_escola.png"
     
@@ -114,7 +111,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 4))
     story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo_he))
     
-    # Extrair dados do aluno com segurança
     if isinstance(dados_aluno, dict):
         d = dados_aluno
     elif hasattr(dados_aluno, 'iloc') and not dados_aluno.empty:
@@ -138,7 +134,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     orgao = str(d.get('orgao_expeditor', 'SSP/DF'))
     dt_exp = str(d.get('data_expedicao', '07/07/2012'))
 
-    # 2. Tabela de Dados Cadastrais
     dados_cadastrais = [
         [Paragraph("Curso", estilo_label), Paragraph(f"<b>{curso}</b>", estilo_val), Paragraph("", estilo_val), Paragraph("", estilo_val)],
         [Paragraph("Matrícula", estilo_label), Paragraph("Turma/ Turno", estilo_label), Paragraph("Nome", estilo_label), Paragraph("CPF / Sexo", estilo_label)],
@@ -166,7 +161,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(t_cad)
     story.append(Spacer(1, 4))
 
-    # 3. Tabela de Componentes Curriculares (Histórico)
     header_hist = [
         Paragraph("<b>Componente Curricular</b>", estilo_th),
         Paragraph("<b>Semestre</b>", estilo_th),
@@ -201,15 +195,14 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1A365D")),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#FFFFFF")),
     ]))
     
     story.append(t_hist)
     story.append(Spacer(1, 4))
 
-    # 4. Rodapé Oficial, Legendas e Assinaturas
     rodape_dados = [
         [Paragraph("<b>AP = Apto; AE = Aprov. de Estudos; NA = Não Apto; TR = Tranc. de Curso; D = Desistente</b>", estilo_label),  
          Paragraph("<b>T. Teoria:</b> 1.366", estilo_val),  
@@ -226,8 +219,8 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F7FAFC")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 2), (-1, 2), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     
     story.append(t_rod)
@@ -238,9 +231,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
 
 def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
-    """Gera o PDF consolidado da Matriz AFIN em formato paisagem com layout idêntico à planilha oficial."""
+    """Gera o PDF consolidado da Matriz AFIN em formato paisagem com cores Verde Mar / Azul Claro e padding otimizado."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=15, leftMargin=15, topMargin=15, bottomMargin=15)
     story = []
     
     styles = getSampleStyleSheet()
@@ -257,7 +250,7 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     estilo_info = ParagraphStyle(
         'InfoAFIN',
         parent=styles['Normal'],
-        fontSize=9,
+        fontSize=8.5,
         alignment=0,
         textColor=colors.HexColor("#1A202C"),
         fontName='Helvetica-Bold'
@@ -266,7 +259,7 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     estilo_th = ParagraphStyle(
         'THAFIN',
         parent=styles['Normal'],
-        fontSize=6,
+        fontSize=5.5,
         alignment=1,
         textColor=colors.whitesmoke,
         fontName='Helvetica-Bold'
@@ -275,7 +268,7 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     estilo_td = ParagraphStyle(
         'TDAFIN',
         parent=styles['Normal'],
-        fontSize=7,
+        fontSize=6.5,
         alignment=1,
         textColor=colors.HexColor("#2D3748"),
         fontName='Helvetica'
@@ -284,15 +277,15 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     estilo_td_nome = ParagraphStyle(
         'TDAFINNome',
         parent=styles['Normal'],
-        fontSize=7,
+        fontSize=6.5,
         alignment=0,
         textColor=colors.HexColor("#2D3748"),
         fontName='Helvetica'
     )
 
-    largura_total = 752  # Largura útil em paisagem (792 - 40 de margens)
-    larg_matr = 60
-    larg_nome = 160
+    largura_total = 762  # 792 - 30 de margens
+    larg_matr = 55
+    larg_nome = 155
     
     colunas_originais = list(df_matriz.columns) if df_matriz is not None and not df_matriz.empty else []
     num_disciplinas = max(1, (len(colunas_originais) - 2) // 2)
@@ -301,36 +294,36 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     larg_dupla = larg_restante / num_disciplinas
     larg_col_uc = larg_dupla / 2.0
 
-    # 1. Cabeçalho Superior Institucional
+    # 1. Cabeçalho Superior Institucional (Tom Verde Mar / Petróleo Suave)
     tabela_topo = Table([
         [Paragraph("SEEDF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; CEP ETP - AFIN &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; CURSO: TÉCNICO EM SECRETARIA ESCOLAR", estilo_topo)]
     ], colWidths=[largura_total])
     
     tabela_topo.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#1A365D")),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#006666")), # Verde Mar Profundo
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
     ]))
     
     story.append(tabela_topo)
-    story.append(Spacer(1, 3))
+    story.append(Spacer(1, 2))
 
-    # 2. Informações de Semestre e Turma
+    # 2. Informações de Semestre e Turma (Azul Claro Suave / Dourado subtil)
     tabela_info = Table([
         [Paragraph(f"SEMESTRE: {semestre}", estilo_info), Paragraph(f"TURMA: {turma}", estilo_info)]
     ], colWidths=[largura_total / 2.0, largura_total / 2.0])
     tabela_info.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FEFCBF")),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#ECC94B")),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#EBF8FF")), # Azul Claro Suave
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
     ]))
     story.append(tabela_info)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 3))
 
     # 3. Construção das linhas de cabeçalho da matriz
     header_linha_disc = [Paragraph("<b>MATRÍCULA</b>", estilo_th), Paragraph("<b>ESTUDANTE</b>", estilo_th)]
@@ -339,7 +332,6 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     
     col_widths = [larg_matr, larg_nome]
     span_commands = [
-        # Span vertical para MATRÍCULA e ESTUDANTE cobrindo as 3 linhas do cabeçalho
         ('SPAN', (0, 0), (0, 2)),
         ('SPAN', (1, 0), (1, 2)),
     ]
@@ -357,12 +349,10 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
                         iduc_str = k
                         break
             
-            # Adicionar células para FAL e CON
             header_linha_disc.extend([Paragraph(f"<b>{nome_uc}</b>", estilo_th), Paragraph("", estilo_th)])
             header_linha_iduc.extend([Paragraph(f"<b>{iduc_str}</b>", estilo_th), Paragraph("", estilo_th)])
             header_linha_tipo.extend([Paragraph("<b>FAL</b>", estilo_th), Paragraph("<b>CON</b>", estilo_th)])
             
-            # Span horizontal unindo as duas colunas (FAL e CON) para o nome da UC e para o IDUC
             span_commands.append(('SPAN', (col_idx_atual, 0), (col_idx_atual + 1, 0)))
             span_commands.append(('SPAN', (col_idx_atual, 1), (col_idx_atual + 1, 1)))
             
@@ -388,15 +378,15 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
 
     tabela_matriz = Table(dados_tabela, repeatRows=3, colWidths=col_widths)
     
-    # Estilização completa da tabela e aplicação dos SPANs calculados
+    # Estilização harmoniosa combinando Verde Mar e Azul Claro com padding reduzido
     estilo_tabela_base = [
-        ('BACKGROUND', (0, 0), (-1, 2), colors.HexColor("#1A365D")),
+        ('BACKGROUND', (0, 0), (-1, 2), colors.HexColor("#234E52")), # Verde Mar Escuro Suave para o cabeçalho das disciplinas
         ('TEXTCOLOR', (0, 0), (-1, 2), colors.whitesmoke),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5),  # Padding reduzido para poupar espaço vertical
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
         ('BACKGROUND', (0, 3), (1, -1), colors.HexColor("#FFFFFF")),
         ('BACKGROUND', (2, 3), (-1, -1), colors.HexColor("#F7FAFC")),
     ]
