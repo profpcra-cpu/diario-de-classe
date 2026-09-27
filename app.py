@@ -76,7 +76,7 @@ menu = st.sidebar.selectbox("Escolha uma opção:", lista_menus)
 # ==========================================
 # 3. BLOCOS DE FUNCIONALIDADES DO SISTEMA
 # ==========================================
-elif menu == "📊 AFIN (Acompanhamento de Frequência e Conceito)":
+if menu == "📊 AFIN (Acompanhamento de Frequência e Conceito)":
     renderizar_modulo_afin()
 elif menu == "⚙️ Gestão de Acessos e Senhas (Admin)":
     st.subheader("⚙️ Painel do Administrador - Gestão de Utilizadores e Senhas")
