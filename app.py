@@ -5,15 +5,6 @@ from datetime import date
 
 st.set_page_config(page_title="Sistema Escolar DDC - Diário de Classe", layout="wide")
 
-st.title("📚 Sistema de Gestão Escolar - DDC (Diário de Classe)")
-st.sidebar.header("Menu de Navegação")
-menu = st.sidebar.selectbox("Escolha uma opção:", [
-    "Consultar Pessoas", 
-    "Editor Estilo Planilha (Alunos)", 
-    "Diário de Classe (Notas - TB_AVALIACOES)",
-    "Gestão do Diário e Frequência (TB_DIÁRIO)"
-])
-
 def executar_query(query, params=None, fetch=True):
     conexao = pymysql.connect(
         host='34.39.195.71',
@@ -32,6 +23,60 @@ def executar_query(query, params=None, fetch=True):
         conexao.commit()
         cursor.close()
         conexao.close()
+
+# --- SISTEMA DE AUTENTICAÇÃO ---
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+    st.session_state["perfil"] = None
+    st.session_state["email_utilizador"] = None
+
+if not st.session_state["autenticado"]:
+    st.title("🔒 Acesso Restrito - Sistema de Gestão Escolar")
+    st.markdown("Por favor, faça login com o seu e-mail cadastrado para aceder ao sistema.")
+    
+    with st.form("form_login"):
+        input_email = st.text_input("E-mail:")
+        input_senha = st.text_input("Palavra-passe:", type="password")
+        submit_login = st.form_submit_button("Entrar")
+        
+        if submit_login:
+            try:
+                # Verificar se o utilizador existe na base de dados
+                query_login = "SELECT * FROM TB_UTILIZADORES WHERE email = %s AND senha = %s"
+                df_user = executar_query(query_login, params=(input_email, input_senha))
+                
+                if not df_user.empty:
+                    st.session_state["autenticado"] = True
+                    st.session_state["perfil"] = df_user.iloc[0]['perfil']
+                    st.session_state["email_utilizador"] = df_user.iloc[0]['email']
+                    st.success("Login efetuado com sucesso! A carregar sistema...")
+                    st.rerun()
+                else:
+                    st.error("E-mail ou palavra-passe incorretos, ou utilizador não autorizado.")
+            except Exception as e:
+                st.warning("A tabela TB_UTILIZADORES ainda não foi criada na base de dados. Crie a tabela para ativar o login.")
+                # Modo de segurança temporário caso a tabela ainda não exista
+                if input_email == "prof.pcra@gmail.com" and input_senha == "123456":
+                    st.session_state["autenticado"] = True
+                    st.session_state["perfil"] = "admin"
+                    st.session_state["email_utilizador"] = input_email
+                    st.rerun()
+    st.stop() # Interrompe a execução do resto da app se não estiver logado
+
+# --- APLICAÇÃO PRINCIPAL (Apenas visível após login) ---
+st.sidebar.success(f"Logado como: {st.session_state['email_utilizador']} ({st.session_state['perfil'].upper()})")
+if st.sidebar.button("🚪 Terminar Sessão"):
+    st.session_state["autenticado"] = False
+    st.rerun()
+
+st.title("📚 Sistema de Gestão Escolar - DDC (Diário de Classe)")
+st.sidebar.header("Menu de Navegação")
+menu = st.sidebar.selectbox("Escolha uma opção:", [
+    "Consultar Pessoas", 
+    "Editor Estilo Planilha (Alunos)", 
+    "Diário de Classe (Notas - TB_AVALIACOES)",
+    "Gestão do Diário e Frequência (TB_DIÁRIO)"
+])
 
 if menu == "Consultar Pessoas":
     st.subheader("Registo de Alunos / Pessoas (Consulta)")
@@ -112,22 +157,19 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
     with tab2:
         st.markdown("### Controlo de Presenças com Colunas Dinâmicas de Datas")
         try:
-            # Carregar alunos da turma
             df_alunos = executar_query(f"SELECT matrícula, turma FROM TB_AVALIACOES WHERE turma = '{turma_diario}' LIMIT 30")
             if df_alunos.empty:
                 df_alunos = executar_query("SELECT matrícula, turma FROM TB_AVALIACOES LIMIT 20")
             
-            # Simular colunas dinâmicas de datas carregadas do banco (ex: datas da tabela TB_DIARIO)
             try:
                 df_datas = executar_query(f"SELECT DISTINCT data FROM TB_DIARIO WHERE turma = '{turma_diario}'")
                 lista_datas = df_datas['data'].astype(str).tolist() if not df_datas.empty else [str(date.today())]
             except:
                 lista_datas = [str(date.today())]
                 
-            # Montar DataFrame Dinâmico (Alunos + Colunas de Datas)
             df_matriz_freq = df_alunos[['matrícula', 'turma']].copy()
             for d in lista_datas:
-                df_matriz_freq[f"Aula: {d}"] = True  # True para presença por defeito
+                df_matriz_freq[f"Aula: {d}"] = True
                 
             df_freq_editado = st.data_editor(df_matriz_freq, use_container_width=True, key="editor_freq_dinamica")
             
