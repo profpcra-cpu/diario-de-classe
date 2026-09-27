@@ -61,7 +61,8 @@ lista_menus = [
     "Editor Estilo Planilha (Alunos)", 
     "Diário de Classe (Notas - TB_AVALIACOES)",
     "Gestão do Diário e Frequência (TB_DIÁRIO)",
-    "🎓 Secretaria - Ficha e Documentos"
+    "🎓 Secretaria - Ficha e Documentos",
+    "📊 AFIN (Acompanhamento de Frequência e Conceito)"
 ]
 
 perfil_atual = st.session_state.get("perfil", "professor")
