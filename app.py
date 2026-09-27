@@ -279,27 +279,47 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                             st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
                             
                     with aba_historico:
-                        st.markdown("### Histórico Curricular e Notas Associadas (TB_DIARIO)")
-                        df_historico_aluno = executar_query("SELECT * FROM TB_DIARIO WHERE matricula = %s", params=(matricula_busca,))
+    st.markdown("### Histórico Curricular e Notas Associadas (TB_DIARIO)")
+    df_historico_aluno = executar_query("SELECT * FROM TB_DIARIO WHERE matricula = %s", params=(matricula_busca,))
+    
+    if df_historico_aluno.empty:
+        st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
+        df_historico_editado = pd.DataFrame()
+    else:
+        # Editor interativo para o histórico/notas do aluno
+        df_historico_editado = st.data_editor(df_historico_aluno, use_container_width=True, key=f"historico_editor_{matricula_busca}")
+        
+        if st.button("💾 Guardar Alterações do Histórico"):
+            try:
+                atualizados_hist = 0
+                for _, row in df_historico_editado.iterrows():
+                    mat = row.get('matricula')
+                    iduc_val = row.get('iduc')
+                    
+                    if mat and iduc_val:
+                        sql_hist = """
+                            UPDATE TB_DIARIO 
+                            SET unidade_curricular = %s, carga_horaria = %s, modulo = %s, faltas = %s 
+                            WHERE matricula = %s AND iduc = %s
+                        """
+                        executar_query(
+                            sql_hist, 
+                            params=(
+                                row.get('unidade_curricular'), 
+                                row.get('carga_horaria'), 
+                                row.get('modulo'), 
+                                row.get('faltas'), 
+                                mat, 
+                                iduc_val
+                            ), 
+                            fetch=False
+                        )
+                        atualizados_hist += 1
                         
-                        if df_historico_aluno.empty:
-                            st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
-                            df_historico_editado = pd.DataFrame()
-                        else:
-                            # Editor interativo para o histórico/notas do aluno
-                            df_historico_editado = st.data_editor(df_historico_aluno, use_container_width=True, key=f"historico_editor_{matricula_busca}")
-                            
-                            if st.button("💾 Guardar Alterações do Histórico"):
-                                try:
-                                    for _, row in df_historico_editado.iterrows():
-                                        id_reg = row.get('id') if 'id' in row else None
-                                        if id_reg:
-                                            sql_hist = "UPDATE TB_DIARIO SET unidade_curricular = %s, carga_horaria = %s, modulo = %s, faltas = %s WHERE id = %s"
-                                            executar_query(sql_hist, params=(row.get('unidade_curricular'), row.get('carga_horaria'), row.get('modulo'), row.get('faltas'), id_reg), fetch=False)
-                                    st.success("Alterações do histórico guardadas com sucesso na base de dados!")
-                                except Exception as e:
-                                    st.success("Alterações do histórico guardadas com sucesso!")
-                            
+                st.success(f"Sucesso! {atualizados_hist} registos do histórico foram guardados na base de dados!")
+                st.rerun() # Atualiza a tela automaticamente para refletir os dados gravados do banco
+            except Exception as e:
+                st.error(f"Erro ao guardar alterações no histórico: {e}")                            
                         st.markdown("---")
                         st.markdown("### 🖨️ Central de Emissão de Documentos Acadêmicos")
                         col_doc1, col_doc2 = st.columns(2)
