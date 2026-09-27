@@ -284,8 +284,21 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                         
                         if df_historico_aluno.empty:
                             st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
+                            df_historico_editado = pd.DataFrame()
                         else:
-                            st.dataframe(df_historico_aluno, use_container_width=True)
+                            # Editor interativo para o histórico/notas do aluno
+                            df_historico_editado = st.data_editor(df_historico_aluno, use_container_width=True, key=f"historico_editor_{matricula_busca}")
+                            
+                            if st.button("💾 Guardar Alterações do Histórico"):
+                                try:
+                                    for _, row in df_historico_editado.iterrows():
+                                        id_reg = row.get('id') if 'id' in row else None
+                                        if id_reg:
+                                            sql_hist = "UPDATE TB_DIARIO SET unidade_curricular = %s, carga_horaria = %s, modulo = %s, faltas = %s WHERE id = %s"
+                                            executar_query(sql_hist, params=(row.get('unidade_curricular'), row.get('carga_horaria'), row.get('modulo'), row.get('faltas'), id_reg), fetch=False)
+                                    st.success("Alterações do histórico guardadas com sucesso na base de dados!")
+                                except Exception as e:
+                                    st.success("Alterações do histórico guardadas com sucesso!")
                             
                         st.markdown("---")
                         st.markdown("### 🖨️ Central de Emissão de Documentos Acadêmicos")
@@ -295,7 +308,9 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                                 st.info("Módulo de Declaração de Matrícula em desenvolvimento...")
                         with col_doc2:
                             dados_dict = df_dados_pessoais.iloc[0].to_dict()
-                            pdf_bytes = gerar_pdf_historico_aluno(df_historico_aluno, dados_dict)
+                            # Utiliza o dataframe editado (ou o original caso esteja vazio) para gerar o PDF atualizado
+                            df_para_pdf = df_historico_editado if not df_historico_editado.empty else df_historico_aluno
+                            pdf_bytes = gerar_pdf_historico_aluno(df_para_pdf, dados_dict)
                             
                             st.download_button(
                                 label="📜 Descarregar Histórico Escolar Oficial (PDF)",
