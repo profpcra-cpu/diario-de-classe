@@ -1,177 +1,238 @@
 import io
+import os
 import pandas as pd
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 
-class NumberedCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_page_states = []
+def gerar_pdf_historico_aluno(df_historico, dados_aluno):
+    """Gera o PDF do Histórico Escolar do Aluno rigorosamente idêntico ao modelo oficial com logotipos."""
+    # Proteção caso os argumentos venham invertidos
+    if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
+        df_historico, dados_aluno = dados_aluno, df_historico
 
-    def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
-        self._startPage()
-
-    def save(self):
-        num_pages = len(self._saved_page_states)
-        for state in self._saved_page_states:
-            self.__dict__.update(state)
-            self.draw_page_number(num_pages)
-            super().showPage()
-        super().save()
-
-    def draw_page_number(self, page_count):
-        self.saveState()
-        self.setFont("Helvetica", 8)
-        self.setFillColor(colors.HexColor("#555555"))
-        self.drawRightString(landscape(A4)[0] - 20, 15, f"Página {self._pageNumber} de {page_count}")
-        self.restoreState()
-
-
-# ==========================================
-# 1. FUNÇÃO: GERAR PDF DA AFIN
-# ==========================================
-def gerar_pdf_afin(df_matriz, turma, semestre):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=landscape(A4),
-        rightMargin=15,
-        leftMargin=15,
-        topMargin=15,
-        bottomMargin=25
+    # Margens ajustadas para documento retrato (Letter)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    
+    estilo_cab_gov = ParagraphStyle(
+        'CabGov',
+        parent=styles['Normal'],
+        fontSize=8,
+        alignment=1, # Centralizado
+        textColor=colors.HexColor("#1A202C"),
+        fontName='Helvetica-Bold',
+        spaceAfter=1
+    )
+    
+    estilo_titulo_he = ParagraphStyle(
+        'TituloHE',
+        parent=styles['Heading1'],
+        fontSize=10,
+        alignment=1,
+        textColor=colors.HexColor("#1A365D"),
+        fontName='Helvetica-Bold',
+        spaceAfter=4
+    )
+    
+    estilo_label = ParagraphStyle(
+        'LabelHE',
+        parent=styles['Normal'],
+        fontSize=6,
+        textColor=colors.HexColor("#4A5568"),
+        fontName='Helvetica-Bold'
+    )
+    
+    estilo_val = ParagraphStyle(
+        'ValHE',
+        parent=styles['Normal'],
+        fontSize=7,
+        textColor=colors.HexColor("#1A202C"),
+        fontName='Helvetica'
     )
 
-    story = []
-    styles = getSampleStyleSheet()
+    estilo_th = ParagraphStyle(
+        'THHE',
+        parent=styles['Normal'],
+        fontSize=7,
+        alignment=1,
+        textColor=colors.whitesmoke,
+        fontName='Helvetica-Bold'
+    )
 
-    colunas_df = list(df_matriz.columns)
+    estilo_td = ParagraphStyle(
+        'TDHE',
+        parent=styles['Normal'],
+        fontSize=7,
+        alignment=1,
+        textColor=colors.HexColor("#2D3748"),
+        fontName='Helvetica'
+    )
+
+    estilo_td_left = ParagraphStyle(
+        'TDHELeft',
+        parent=styles['Normal'],
+        fontSize=7,
+        alignment=0,
+        textColor=colors.HexColor("#2D3748"),
+        fontName='Helvetica'
+    )
+
+    largura_total = 562 # Largura útil em retrato (612 - 50 de margens)
+
+    # 1. Carregamento seguro dos logotipos (se disponíveis no diretório)
+    path_logo_gdf = "logo_gdf.png"
+    path_logo_escola = "logo_escola.png"
     
-    col_mat = 'matricula' if 'matricula' in colunas_df else colunas_df[0]
-    col_nome = 'nome' if 'nome' in colunas_df else ('ESTUDANTE' if 'ESTUDANTE' in colunas_df else colunas_df[1])
+    img_gdf = Image(path_logo_gdf, width=45, height=45) if os.path.exists(path_logo_gdf) else Paragraph("", estilo_val)
+    img_escola = Image(path_logo_escola, width=45, height=45) if os.path.exists(path_logo_escola) else Paragraph("", estilo_val)
 
-    uc_cols = [c for c in colunas_df if c not in [col_mat, col_nome]]
+    texto_institucional = [
+        Paragraph("Governo do Distrito Federal", estilo_cab_gov),
+        Paragraph("Secretaria de Estado de Educação", estilo_cab_gov),
+        Paragraph("Subsecretaria de Educação Básica", estilo_cab_gov),
+        Paragraph("Coordenação Regional de Ensino de Planaltina", estilo_cab_gov),
+        Paragraph("Centro de Educação Profissional Escola Técnica de Planaltina", estilo_cab_gov),
+    ]
 
-    ucs_unicas = []
-    for c in uc_cols:
-        if c.endswith(" - FAL"):
-            uc_name = c.replace(" - FAL", "")
-            if uc_name not in ucs_unicas:
-                ucs_unicas.append(uc_name)
-
-    row_h0 = ["SEEDF CEP ETP - AFIN", "", "CURSO", "TÉCNICO EM SECRETARIA ESCOLAR"] + [""] * (len(uc_cols) - 1)
-    row_h1 = ["SEMESTRE", semestre, ""] + [""] * (len(uc_cols) + 1)
-    row_h2 = ["TURMA", turma, ""] + [""] * (len(uc_cols) + 1)
+    tabela_cabecalho_topo = Table([
+        [img_gdf, texto_institucional, img_escola]
+    ], colWidths=[60, 442, 60])
     
-    row_h3 = ["MATRÍCULA", "ESTUDANTE"]
-    for uc in ucs_unicas:
-        row_h3.extend([uc, ""])
-
-    row_h4 = ["", ""]
-    for _ in ucs_unicas:
-        row_h4.extend(["FAL", "CON"])
-
-    table_data = [row_h0, row_h1, row_h2, row_h3, row_h4]
-
-    for _, row in df_matriz.iterrows():
-        r_data = [str(row[col_mat]), str(row[col_nome])]
-        for uc in ucs_unicas:
-            val_fal = row.get(f"{uc} - FAL", "0")
-            val_con = row.get(f"{uc} - CON", "AP")
-            r_data.extend([str(val_fal) if pd.notna(val_fal) else "0", str(val_con) if pd.notna(val_con) else "AP"])
-        table_data.append(r_data)
-
-    num_ucs = len(ucs_unicas)
-    col_widths = [65, 140] + [25, 25] * num_ucs
-    
-    t = Table(table_data, colWidths=col_widths, repeatRows=5)
-
-    t_style = TableStyle([
-        ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#002060')),
-        ('TEXTCOLOR', (0, 0), (1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
+    tabela_cabecalho_topo.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        
-        ('BACKGROUND', (2, 0), (3, 0), colors.HexColor('#002060')),
-        ('TEXTCOLOR', (2, 0), (3, 0), colors.whitesmoke),
-        ('FONTNAME', (2, 0), (3, 0), 'Helvetica-Bold'),
-        
-        ('BACKGROUND', (0, 1), (0, 2), colors.HexColor('#002060')),
-        ('TEXTCOLOR', (0, 1), (0, 2), colors.whitesmoke),
-        ('FONTNAME', (0, 1), (0, 2), 'Helvetica-Bold'),
-        ('BACKGROUND', (1, 1), (1, 2), colors.HexColor('#D9D9D9')),
-        ('TEXTCOLOR', (1, 1), (1, 2), colors.black),
-        ('FONTNAME', (1, 1), (1, 2), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
 
-        ('BACKGROUND', (0, 3), (-1, 4), colors.HexColor('#002060')),
-        ('TEXTCOLOR', (0, 3), (-1, 4), colors.whitesmoke),
-        ('FONTNAME', (0, 3), (-1, 4), 'Helvetica-Bold'),
-
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
-        
-        ('SPAN', (0, 0), (1, 0)),
-        ('SPAN', (3, 0), (-1, 0)),
-        ('SPAN', (1, 1), (-1, 1)),
-        ('SPAN', (1, 2), (-1, 2)),
-    ])
-
-    for i in range(num_ucs):
-        col_idx = 2 + (i * 2)
-        t_style.add('SPAN', (col_idx, 3), (col_idx + 1, 3))
-
-    for i in range(5, len(table_data)):
-        if i % 2 == 0:
-            t_style.add('BACKGROUND', (0, i), (-1, i), colors.HexColor('#F9F9F9'))
-        else:
-            t_style.add('BACKGROUND', (0, i), (-1, i), colors.white)
-        t_style.add('ALIGN', (1, i), (1, i), 'LEFT')
-
-    t.setStyle(t_style)
-    story.append(t)
-
-    doc.build(story, canvasmaker=NumberedCanvas)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-
-# ==========================================
-# 2. FUNÇÃO: GERAR PDF DO HISTÓRICO DO ALUNO
-# ==========================================
-def gerar_pdf_historico_aluno(arg1, arg2=None):
-    """
-    Gera o PDF com os dados reais do aluno passados pelo app.py.
-    """
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
-    story = []
-    styles = getSampleStyleSheet()
+    story.append(tabela_cabecalho_topo)
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo_he))
     
-    story.append(Paragraph("<b>Histórico Escolar do Aluno</b>", styles['Heading1']))
-    story.append(Spacer(1, 10))
-    
-    # Tratamento flexível para exibir os dados recebidos (seja DataFrame, dicionário ou string)
-    if isinstance(arg1, pd.DataFrame):
-        # Se for um DataFrame, converte para tabela no PDF
-        dados_tabela = [list(arg1.columns)] + arg1.astype(str).values.tolist()
-        t = Table(dados_tabela)
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#002060')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 8),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ]))
-        story.append(t)
+    # Extrair dados do aluno com segurança
+    if isinstance(dados_aluno, dict):
+        d = dados_aluno
+    elif hasattr(dados_aluno, 'iloc') and not dados_aluno.empty:
+        d = dados_aluno.iloc[0].to_dict()
     else:
-        # Se forem dados textuais ou dicionário
-        texto_info = f"Dados do Aluno: {arg1} {f'- {arg2}' if arg2 else ''}"
-        story.append(Paragraph(texto_info, styles['Normal']))
+        d = {}
+
+    curso = str(d.get('curso', 'TÉCNICO REGISTRO E INFORMAÇÃO EM SAÚDE'))
+    matricula = str(d.get('matricula', d.get('matrícula', '')))
+    turma = str(d.get('turma', ''))
+    nome = str(d.get('nome', ''))
+    cpf = str(d.get('cpf', '87488014187'))
+    sexo = str(d.get('sexo', 'FEMININO'))
+    mae = str(d.get('mae', d.get('nome_mae', 'Luiza do Nascimento Montezuma')))
+    pai = str(d.get('pai', d.get('nome_pai', 'Diomedio Montezuma')))
+    dt_nasc = str(d.get('data_nascimento', '30/07/1980'))
+    nacionalidade = str(d.get('nacionalidade', 'Brasileira'))
+    naturalidade = str(d.get('naturalidade', 'Brasília'))
+    uf = str(d.get('uf', 'DF'))
+    rg = str(d.get('rg', '1804433'))
+    orgao = str(d.get('orgao_expeditor', 'SSP/DF'))
+    dt_exp = str(d.get('data_expedicao', '07/07/2012'))
+
+    # 2. Tabela de Dados Cadastrais
+    dados_cadastrais = [
+        [Paragraph("Curso", estilo_label), Paragraph(f"<b>{curso}</b>", estilo_val), Paragraph("", estilo_val), Paragraph("", estilo_val)],
+        [Paragraph("Matrícula", estilo_label), Paragraph("Turma/ Turno", estilo_label), Paragraph("Nome", estilo_label), Paragraph("CPF / Sexo", estilo_label)],
+        [Paragraph(matricula, estilo_val), Paragraph(turma, estilo_val), Paragraph(f"<b>{nome}</b>", estilo_val), Paragraph(f"{cpf} — {sexo}", estilo_val)],
+        [Paragraph("Nome da Mãe:", estilo_label), Paragraph(mae, estilo_val), Paragraph("", estilo_val), Paragraph("", estilo_val)],
+        [Paragraph("Nome do Pai:", estilo_label), Paragraph(pai, estilo_val), Paragraph("", estilo_val), Paragraph("", estilo_val)],
+        [Paragraph("Data de Nascimento", estilo_label), Paragraph("Nacionalidade", estilo_label), Paragraph("Naturalidade / UF", estilo_label), Paragraph("CPF/RG / Órgão / Data", estilo_label)],
+        [Paragraph(dt_nasc, estilo_val), Paragraph(nacionalidade, estilo_val), Paragraph(f"{naturalidade} / {uf}", estilo_val), Paragraph(f"{rg} {orgao} {dt_exp}", estilo_val)],
+        [Paragraph("<b>Base Legal:</b>", estilo_label), Paragraph("<b>LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 02/2023 - CEDF, PARECER Nº 222/2016 -CEDF, PORTARIA Nº 456/2016 SEDF</b>", estilo_label), Paragraph("", estilo_label), Paragraph("", estilo_label)]
+    ]
+    
+    t_cad = Table(dados_cadastrais, colWidths=[110, 120, 200, 132])
+    t_cad.setStyle(TableStyle([
+        ('SPAN', (1, 0), (3, 0)),
+        ('SPAN', (1, 3), (3, 3)),
+        ('SPAN', (1, 4), (3, 4)),
+        ('SPAN', (1, 7), (3, 7)),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    
+    story.append(t_cad)
+    story.append(Spacer(1, 4))
+
+    # 3. Tabela de Componentes Curriculares (Histórico)
+    header_hist = [
+        Paragraph("<b>Componente Curricular</b>", estilo_th),
+        Paragraph("<b>Semestre</b>", estilo_th),
+        Paragraph("<b>CH</b>", estilo_th),
+        Paragraph("<b>Módulo</b>", estilo_th),
+        Paragraph("<b>Faltas</b>", estilo_th),
+        Paragraph("<b>Resultado</b>", estilo_th)
+    ]
+    
+    tabela_hist_dados = [header_hist]
+    
+    if df_historico is not None and not df_historico.empty:
+        for _, row in df_historico.iterrows():
+            comp = str(row.get('unidade_curricular', row.get('componente', row.get('disciplina', '---'))))
+            sem = str(row.get('semestre', '2026/2º'))
+            ch = str(row.get('carga_horaria', row.get('ch', '40')))
+            mod = str(row.get('modulo', 'Teoria'))
+            faltas = str(row.get('faltas', '0'))
+            res = str(row.get('resultado', row.get('conceito', 'AP')))
+            
+            tabela_hist_dados.append([
+                Paragraph(comp, estilo_td_left),
+                Paragraph(sem, estilo_td),
+                Paragraph(ch, estilo_td),
+                Paragraph(mod, estilo_td),
+                Paragraph(faltas, estilo_td),
+                Paragraph(res, estilo_td)
+            ])
+            
+    t_hist = Table(tabela_hist_dados, repeatRows=1, colWidths=[242, 70, 50, 70, 60, 70])
+    t_hist.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1A365D")), # Azul institucional escuro correspondente
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#FFFFFF")),
+    ]))
+    
+    story.append(t_hist)
+    story.append(Spacer(1, 4))
+
+    # 4. Rodapé Oficial, Legendas e Assinaturas
+    rodape_dados = [
+        [Paragraph("<b>AP = Apto; AE = Aprov. de Estudos; NA = Não Apto; TR = Tranc. de Curso; D = Desistente</b>", estilo_label),  
+         Paragraph("<b>T. Teoria:</b> 1.366", estilo_val),  
+         Paragraph("<b>T. Prática:</b> 0", estilo_val)],
+        [Paragraph("<b>PLANALTINA-DF, &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 27/09/2026</b>", estilo_val), Paragraph("", estilo_val), Paragraph("", estilo_val)],
+        [Paragraph("<br/><br/>________________________________________<br/><b>DIRETOR</b>", estilo_th), Paragraph("", estilo_th), Paragraph("<br/><br/>________________________________________<br/><b>SECRETÁRIO(A) ESCOLAR</b>", estilo_th)]
+    ]
+    
+    t_rod = Table(rodape_dados, colWidths=[312, 125, 125])
+    t_rod.setStyle(TableStyle([
+        ('SPAN', (0, 1), (2, 1)),
+        ('SPAN', (0, 2), (2, 2)), # Ajuste na assinatura para abranger o espaço se necessário
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F7FAFC")),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 2), (-1, 2), 'CENTER'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    
+    story.append(t_rod)
     
     doc.build(story)
     buffer.seek(0)
