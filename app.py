@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import date
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 
@@ -32,7 +32,7 @@ def executar_query(query, params=None, fetch=True):
         cursor.close()
         conexao.close()
 
-# --- FUNÇÃO PARA GERAR O PDF DO HISTÓRICO ESCOLAR (LENDO DA TB_DIARIO) ---
+# --- FUNÇÃO PARA GERAR O PDF DO HISTÓRICO ESCOLAR COM AS LOGOS ---
 def gerar_pdf_historico_aluno(dados_aluno, df_historico):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -57,7 +57,20 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
 
     elements = []
 
-    # Cabeçalho Institucional Oficial
+    # Carregamento das Logos da Raiz do Repositório
+    try:
+        logo_gdf = Image("logo_gdf.png", width=2.0 * cm, height=1.8 * cm)
+        logo_gdf.hAlign = 'CENTER'
+    except:
+        logo_gdf = Paragraph("<b>[Logo GDF]</b>", cell_center)
+
+    try:
+        logo_escola = Image("logo_escola.png", width=2.0 * cm, height=1.8 * cm)
+        logo_escola.hAlign = 'CENTER'
+    except:
+        logo_escola = Paragraph("<b>[Logo Escola]</b>", cell_center)
+
+    # Textos do Cabeçalho Institucional Oficial
     header_text = [
         Paragraph("Governo do Distrito Federal", title_style),
         Paragraph("Secretaria de Estado de Educação", sub_title_style),
@@ -68,10 +81,13 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
         Paragraph("HISTÓRICO ESCOLAR", doc_title_style)
     ]
 
-    header_table = Table([[ [Paragraph("", normal_style)], header_text, [Paragraph("", normal_style)] ]], colWidths=[3.0 * cm, 12.0 * cm, 3.0 * cm])
+    # Tabela de Cabeçalho com Logos nas Laterais e Textos ao Centro
+    header_table = Table([[logo_gdf, header_text, logo_escola]], colWidths=[3.0 * cm, 12.0 * cm, 3.0 * cm])
     header_table.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1, colors.black),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (0,0), (0,0), 'CENTER'),
+        ('ALIGN', (2,0), (2,0), 'CENTER'),
         ('BOTTOMPADDING', (0,0), (-1,-1), 6),
         ('TOPPADDING', (0,0), (-1,-1), 6),
     ]))
@@ -109,7 +125,7 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
     elements.append(t_ident)
     elements.append(Spacer(1, 0.1 * cm))
 
-    # Tabela Curricular baseada nas colunas reais da TB_DIARIO
+    # Tabela Curricular lida da TB_DIARIO
     header_comp = [
         Paragraph("<b>Componente Curricular (Unidade Curricular)</b>", cell_bold),
         Paragraph("<b>Semestre</b>", cell_center_bold),
@@ -443,7 +459,6 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                             
                     with aba_historico:
                         st.markdown("### Histórico Curricular e Notas Associadas (TB_DIARIO)")
-                        # ATUALIZADO: Agora busca diretamente na TB_DIARIO onde está a matricula do aluno
                         df_historico_aluno = executar_query("SELECT * FROM TB_DIARIO WHERE matricula = %s", params=(matricula_busca,))
                         
                         if df_historico_aluno.empty:
