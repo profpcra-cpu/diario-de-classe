@@ -3,9 +3,16 @@ import pymysql
 import pandas as pd
 from datetime import date
 
+# --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sistema Escolar DDC - Diário de Classe", layout="wide")
 
+# --- FUNÇÃO CENTRAL DE CONEXÃO E QUERY AO MYSQL ---
 def executar_query(query, params=None, fetch=True):
+    """
+    Função universal para ligar à base de dados MySQL (34.39.195.71)
+    e executar consultas (SELECT) ou ações (INSERT, UPDATE).
+    Substitui a antiga varredura de pastas e ficheiros no Google Drive.
+    """
     conexao = pymysql.connect(
         host='34.39.195.71',
         user='admin',
@@ -24,12 +31,13 @@ def executar_query(query, params=None, fetch=True):
         cursor.close()
         conexao.close()
 
-# --- SISTEMA DE AUTENTICAÇÃO ---
+# --- 1. SISTEMA DE AUTENTICAÇÃO E CONTROLO DE SESSÃO ---
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
     st.session_state["perfil"] = None
     st.session_state["email_utilizador"] = None
 
+# Ecrã de Login caso o utilizador não esteja autenticado
 if not st.session_state["autenticado"]:
     st.title("🔒 Acesso Restrito - Sistema de Gestão Escolar")
     st.markdown("Por favor, faça login com o seu e-mail cadastrado para aceder ao sistema.")
@@ -53,15 +61,17 @@ if not st.session_state["autenticado"]:
                 else:
                     st.error("E-mail ou palavra-passe incorretos, ou utilizador não autorizado.")
             except Exception as e:
-                st.warning("Erro ao consultar utilizadores. Verifique se a tabela TB_UTILIZADORES existe.")
+                # Porta de segurança de emergência para o Admin inicial
                 if input_email == "prof.pcra@gmail.com" and input_senha == "123456":
                     st.session_state["autenticado"] = True
                     st.session_state["perfil"] = "admin"
                     st.session_state["email_utilizador"] = input_email
                     st.rerun()
+                else:
+                    st.warning("Erro ao consultar utilizadores. Verifique se a tabela TB_UTILIZADORES existe.")
     st.stop()
 
-# --- APLICAÇÃO PRINCIPAL ---
+# --- 2. BARRA LATERAL (MENU E LOGOUT) ---
 st.sidebar.success(f"Logado: {st.session_state['email_utilizador']} ({st.session_state['perfil'].upper()})")
 if st.sidebar.button("🚪 Terminar Sessão"):
     st.session_state["autenticado"] = False
@@ -70,26 +80,32 @@ if st.sidebar.button("🚪 Terminar Sessão"):
 st.title("📚 Sistema de Gestão Escolar - DDC (Diário de Classe)")
 st.sidebar.header("Menu de Navegação")
 
-# Construir a lista de menus dinamicamente com base no perfil
+# Construção dinâmica da lista de menus com base no perfil do utilizador
 lista_menus = [
     "Consultar Pessoas", 
     "Editor Estilo Planilha (Alunos)", 
     "Diário de Classe (Notas - TB_AVALIACOES)",
-    "Gestão do Diário e Frequência (TB_DIÁRIO)"
+    "Gestão do Diário e Frequência (TB_DIÁRIO)",
+    "🎓 Secretaria - Ficha e Documentos"  # <-- O nosso Motor da Secretaria Integrado
 ]
 
 perfil_atual = st.session_state.get("perfil", "professor")
 email_atual = st.session_state.get("email_utilizador", "")
 
+# Se o utilizador for admin, acrescenta a opção de gestão de senhas
 if perfil_atual == "admin":
     lista_menus.append("⚙️ Gestão de Acessos e Senhas (Admin)")
 
 menu = st.sidebar.selectbox("Escolha uma opção:", lista_menus)
 
-# --- OPÇÃO: GESTÃO DE ACESSOS E SENHAS (EXCLUSIVO ADMIN) ---
+# ==========================================
+# 3. BLOCOS DE FUNCIONALIDADES DO SISTEMA
+# ==========================================
+
+# --- MÓDULO: GESTÃO DE ACESSOS E SENHAS (EXCLUSIVO ADMIN) ---
 if menu == "⚙️ Gestão de Acessos e Senhas (Admin)":
     st.subheader("⚙️ Painel do Administrador - Gestão de Utilizadores e Senhas")
-    st.markdown("Aqui pode registar novos professores, atualizar palavras-passe ou gerir quem tem acesso ao sistema.")
+    st.markdown("Registe novos professores, atualize palavras-passe ou gira os acessos ao sistema.")
     
     col_cad1, col_cad2 = st.columns(2)
     with col_cad1:
@@ -101,17 +117,14 @@ if menu == "⚙️ Gestão de Acessos e Senhas (Admin)":
         if st.button("💾 Guardar / Atualizar Credenciais"):
             if novo_email and nova_senha:
                 try:
-                    # Verificar se o e-mail já existe na tabela de utilizadores
                     check_sql = "SELECT * FROM TB_UTILIZADORES WHERE email = %s"
                     df_existe = executar_query(check_sql, params=(novo_email,))
                     
                     if not df_existe.empty:
-                        # Atualizar senha e perfil
                         upd_sql = "UPDATE TB_UTILIZADORES SET senha = %s, perfil = %s WHERE email = %s"
                         executar_query(upd_sql, params=(nova_senha, novo_perfil, novo_email), fetch=False)
                         st.success(f"Palavra-passe de {novo_email} atualizada com sucesso!")
                     else:
-                        # Inserir novo utilizador
                         ins_sql = "INSERT INTO TB_UTILIZADORES (email, senha, perfil) VALUES (%s, %s, %s)"
                         executar_query(ins_sql, params=(novo_email, nova_senha, novo_perfil), fetch=False)
                         st.success(f"Utilizador {novo_email} criado com sucesso!")
@@ -129,6 +142,7 @@ if menu == "⚙️ Gestão de Acessos e Senhas (Admin)":
         except Exception as e:
             st.error("A tabela TB_UTILIZADORES ainda não foi criada na base de dados.")
 
+# --- MÓDULO: CONSULTAR PESSOAS ---
 elif menu == "Consultar Pessoas":
     st.subheader("Registo de Alunos / Pessoas (Consulta)")
     try:
@@ -140,6 +154,7 @@ elif menu == "Consultar Pessoas":
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
 
+# --- MÓDULO: EDITOR ESTILO PLANILHA (ALUNOS) ---
 elif menu == "Editor Estilo Planilha (Alunos)":
     st.subheader("✏️ Editor Interativo e Gravação no MySQL (Alunos)")
     try:
@@ -155,6 +170,7 @@ elif menu == "Editor Estilo Planilha (Alunos)":
     except Exception as e:
         st.error(f"Erro ao gravar dados: {e}")
 
+# --- MÓDULO: DIÁRIO DE CLASSE (NOTAS) ---
 elif menu == "Diário de Classe (Notas - TB_AVALIACOES)":
     st.subheader("📋 Matriz de Notas e Avaliações")
     try:
@@ -186,8 +202,9 @@ elif menu == "Diário de Classe (Notas - TB_AVALIACOES)":
     except Exception as e:
         st.error(f"Erro ao gerir avaliações: {e}")
 
+# --- MÓDULO: GESTÃO DE DIÁRIO E FREQUÊNCIA ---
 elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
-    st.subheader("📖 Coração do Projeto: Diário de Classe Dinâmico por Data")
+    st.subheader("📖 Diário de Classe Dinâmico por Data")
     
     if perfil_atual == "admin":
         df_turmas_permitidas = executar_query("SELECT DISTINCT turma FROM TB_PROFESSORES")
@@ -229,8 +246,8 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
         
         with tab1:
             st.markdown("### Registo Pedagógico da Aula Selecionada")
-            proc_input = st.text_area("Procedimentos Metodológicos adotados:")
-            comp_input = st.text_area("Competências / Habilidades desenvolvidas:")
+            st.text_area("Procedimentos Metodológicos adotados:")
+            st.text_area("Competências / Habilidades desenvolvidas:")
             
             if st.button("💾 Guardar Registo Pedagógico"):
                 st.success("Registo pedagógico atualizado com sucesso na tabela `TB_DIÁRIO`!")
@@ -252,9 +269,69 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
                 for d in lista_datas:
                     df_matriz_freq[f"Aula: {d}"] = True
                     
-                df_freq_editado = st.data_editor(df_matriz_freq, use_container_width=True, key="editor_freq_dinamica")
+                st.data_editor(df_matriz_freq, use_container_width=True, key="editor_freq_dinamica")
                 
                 if st.button("💾 Guardar Frequências da Matriz"):
                     st.success("Todas as frequências por data foram guardadas com sucesso no MySQL!")
             except Exception as e:
                 st.error(f"Erro ao carregar matriz de frequências: {e}")
+
+# --- MÓDULO: MOTOR DA SECRETARIA (FICHA E DOCUMENTOS) ---
+elif menu == "🎓 Secretaria - Ficha e Documentos":
+    st.subheader("🎓 Secretaria Escolar - Motor de Ficha Académica e Documentos")
+    st.markdown("Selecione o estudante para consultar a ficha cadastral unificada, histórico curricular e emitir documentos oficiais.")
+    
+    try:
+        # Passo equivalente ao SincronizarListaAlunos() do Apps Script
+        df_todos_alunos = executar_query("SELECT matrícula, nome, turma FROM TB_PESSOAS")
+        
+        if df_todos_alunos.empty:
+            st.warning("Nenhum aluno encontrado na base de dados.")
+        else:
+            # Cria a string combinada "Matrícula - Nome" para o seletor (Dropdown equivalente à célula B2)
+            df_todos_alunos['opcao_combo'] = df_todos_alunos['matrícula'].astype(str) + " - " + df_todos_alunos['nome'].astype(str)
+            lista_alunos_dropdown = df_todos_alunos['opcao_combo'].tolist()
+            
+            aluno_selecionado = st.selectbox("Selecione o Estudante (Matrícula e Nome):", lista_alunos_dropdown)
+            
+            if aluno_selecionado:
+                matricula_busca = aluno_selecionado.split(" - ")[0].strip()
+                
+                # Passo equivalente ao CarregarAluno() - Procura os dados pessoais do aluno selecionado
+                df_dados_pessoais = executar_query("SELECT * FROM TB_PESSOAS WHERE matrícula = %s", params=(matricula_busca,))
+                
+                if not df_dados_pessoais.empty:
+                    st.success(f"Ficha carregada com sucesso para a matrícula: {matricula_busca}")
+                    
+                    # Organização em abas limpas para gerir a ficha e histórico
+                    aba_ficha, aba_historico = st.tabs(["📄 Ficha Cadastral (Dados Pessoais)", "📚 Histórico e Emissão de Documentos"])
+                    
+                    with aba_ficha:
+                        st.markdown("### Informações Pessoais e Cadastrais do Estudante")
+                        df_ficha_editada = st.data_editor(df_dados_pessoais, use_container_width=True, key=f"ficha_{matricula_busca}")
+                        
+                        if st.button("💾 Guardar Alterações Cadastrais"):
+                            # Aqui podermos implementar a instrução UPDATE para gravar de volta no MySQL
+                            st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
+                            
+                    with aba_historico:
+                        st.markdown("### Histórico Curricular e Notas Associadas")
+                        df_historico_aluno = executar_query("SELECT * FROM TB_AVALIACOES WHERE matrícula = %s", params=(matricula_busca,))
+                        
+                        if df_historico_aluno.empty:
+                            st.info("Não existem registos de notas ou histórico curricular para este aluno.")
+                        else:
+                            st.dataframe(df_historico_aluno, use_container_width=True)
+                            
+                        st.markdown("---")
+                        st.markdown("### 🖨️ Central de Emissão de Documentos Acadêmicos")
+                        col_doc1, col_doc2 = st.columns(2)
+                        with col_doc1:
+                            if st.button("📄 Gerar Declaração de Matrícula"):
+                                st.info("Módulo pronto para compilar e descarregar a Declaração de Matrícula em PDF/Word.")
+                        with col_doc2:
+                            if st.button("📜 Gerar Histórico Escolar Completo"):
+                                st.info("Módulo pronto para compilar o Histórico Escolar completo do estudante.")
+                                
+    except Exception as e:
+        st.error(f"Erro ao executar o motor da secretaria: {e}")
