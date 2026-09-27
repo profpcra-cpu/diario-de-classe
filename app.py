@@ -175,7 +175,7 @@ elif menu == "Diário de Classe (Notas - TB_AVALIACOES)":
     st.subheader("📋 Matriz de Notas e Avaliações")
     try:
         if perfil_atual == "admin":
-            query_notas = "SELECT matrícula, turma, iduc, av1, av2, av3, soma, recup FROM TB_AVALIACOES LIMIT 35"
+            query_notas = "SELECT matricula, turma, iduc, av1, av2, av3, soma, recup FROM TB_AVALIACOES LIMIT 35"
             df_diario = executar_query(query_notas)
         else:
             query_notas = """
