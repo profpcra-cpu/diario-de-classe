@@ -30,9 +30,12 @@ class NumberedCanvas(canvas.Canvas):
         self.drawRightString(landscape(A4)[0] - 20, 15, f"Página {self._pageNumber} de {page_count}")
         self.restoreState()
 
+
+# ==========================================
+# 1. FUNÇÃO: GERAR PDF DA AFIN
+# ==========================================
 def gerar_pdf_afin(df_matriz, turma, semestre):
     buffer = io.BytesIO()
-    # Usar A4 em paisagem para acomodar todas as colunas de UCs (FAL/CON)
     doc = SimpleDocTemplate(
         buffer,
         pagesize=landscape(A4),
@@ -59,7 +62,6 @@ def gerar_pdf_afin(df_matriz, turma, semestre):
             if uc_name not in ucs_unicas:
                 ucs_unicas.append(uc_name)
 
-    # Construção do Cabeçalho da Tabela idêntico ao modelo oficial
     row_h0 = ["SEEDF CEP ETP - AFIN", "", "CURSO", "TÉCNICO EM SECRETARIA ESCOLAR"] + [""] * (len(uc_cols) - 1)
     row_h1 = ["SEMESTRE", semestre, ""] + [""] * (len(uc_cols) + 1)
     row_h2 = ["TURMA", turma, ""] + [""] * (len(uc_cols) + 1)
@@ -74,7 +76,6 @@ def gerar_pdf_afin(df_matriz, turma, semestre):
 
     table_data = [row_h0, row_h1, row_h2, row_h3, row_h4]
 
-    # Preenchimento dos dados dos alunos
     for _, row in df_matriz.iterrows():
         r_data = [str(row[col_mat]), str(row[col_nome])]
         for uc in ucs_unicas:
@@ -83,7 +84,6 @@ def gerar_pdf_afin(df_matriz, turma, semestre):
             r_data.extend([str(val_fal) if pd.notna(val_fal) else "0", str(val_con) if pd.notna(val_con) else "AP"])
         table_data.append(r_data)
 
-    # Larguras das colunas proporcionais
     num_ucs = len(ucs_unicas)
     col_widths = [65, 140] + [25, 25] * num_ucs
     
@@ -135,5 +135,30 @@ def gerar_pdf_afin(df_matriz, turma, semestre):
     story.append(t)
 
     doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ==========================================
+# 2. FUNÇÃO: GERAR PDF DO HISTÓRICO DO ALUNO
+# ==========================================
+def gerar_pdf_historico_aluno(dados_aluno):
+    """
+    Função mantida para evitar o erro de importação no app.py.
+    Ajuste a lógica interna caso necessite de parâmetros específicos.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    story.append(Paragraph("<b>Histórico do Aluno</b>", styles['Heading1']))
+    story.append(Spacer(1, 10))
+    
+    # Exemplo simples de construção caso receba dados em dicionário/dataframe
+    texto_info = f"Documento gerado para o aluno."
+    story.append(Paragraph(texto_info, styles['Normal']))
+    
+    doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
