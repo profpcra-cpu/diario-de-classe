@@ -144,21 +144,35 @@ def gerar_pdf_afin(df_matriz, turma, semestre):
 # ==========================================
 def gerar_pdf_historico_aluno(arg1, arg2=None):
     """
-    Função flexível para aceitar 1 ou 2 argumentos enviados pelo app.py.
+    Gera o PDF com os dados reais do aluno passados pelo app.py.
     """
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     
-    story.append(Paragraph("<b>Histórico do Aluno</b>", styles['Heading1']))
+    story.append(Paragraph("<b>Histórico Escolar do Aluno</b>", styles['Heading1']))
     story.append(Spacer(1, 10))
     
-    # Exemplo de tratamento para exibir os dados recebidos
-    texto_info = f"Documento gerado com sucesso."
-    story.append(Paragraph(texto_info, styles['Normal']))
+    # Tratamento flexível para exibir os dados recebidos (seja DataFrame, dicionário ou string)
+    if isinstance(arg1, pd.DataFrame):
+        # Se for um DataFrame, converte para tabela no PDF
+        dados_tabela = [list(arg1.columns)] + arg1.astype(str).values.tolist()
+        t = Table(dados_tabela)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#002060')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        story.append(t)
+    else:
+        # Se forem dados textuais ou dicionário
+        texto_info = f"Dados do Aluno: {arg1} {f'- {arg2}' if arg2 else ''}"
+        story.append(Paragraph(texto_info, styles['Normal']))
     
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()
     return buffer.getvalue()
