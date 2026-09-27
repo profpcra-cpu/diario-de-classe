@@ -274,48 +274,39 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                     with aba_ficha:
                         st.markdown("### Informações Pessoais e Cadastrais do Estudante")
                         
-                        # Extrair dados do aluno para exibir em formato de formulário limpo
+                        # Extrai todos os dados do aluno num dicionário
                         aluno_info = df_dados_pessoais.iloc[0].to_dict()
                         
                         with st.form(key=f"form_ficha_{matricula_busca}"):
                             col_f1, col_f2 = st.columns(2)
+                            campos_atualizados = {}
                             
-                            with col_f1:
-                                novo_nome = st.text_input("Nome Completo:", value=str(aluno_info.get('nome', '')))
-                                nova_turma = st.text_input("Turma:", value=str(aluno_info.get('turma', '')))
-                                novo_sexo = st.text_input("Sexo:", value=str(aluno_info.get('sexo', '')))
-                                novo_cpf = st.text_input("CPF:", value=str(aluno_info.get('cpf', '')))
-                                
-                            with col_f2:
-                                novo_curso = st.text_input("Curso:", value=str(aluno_info.get('curso', '')))
-                                nova_sigla = st.text_input("Sigla:", value=str(aluno_info.get('sigla', '')))
-                                nova_dt_nasc = st.text_input("Data de Nascimento:", value=str(aluno_info.get('dt_nascimento', '')))
-                                novo_pai = st.text_input("Nome do Pai:", value=str(aluno_info.get('nome_do_pai', '')))
-                                
+                            # Filtra para excluir a chave primária da edição direta, gerando inputs para todas as colunas existentes
+                            chaves = [k for k in aluno_info.keys() if k.lower() != 'matricula']
+                            
+                            for i, col_name in enumerate(chaves):
+                                val_atual = str(aluno_info.get(col_name, ''))
+                                if val_atual == 'None' or val_atual == 'nan':
+                                    val_atual = ''
+                                    
+                                target_col = col_f1 if i % 2 == 0 else col_f2
+                                with target_col:
+                                    campos_atualizados[col_name] = st.text_input(
+                                        f"{col_name.replace('_', ' ').title()}:", 
+                                        value=val_atual
+                                    )
+                                    
                             submit_cadastral = st.form_submit_button("💾 Guardar Alterações Cadastrais")
                             
                             if submit_cadastral:
                                 try:
-                                    sql_upd_cad = """
-                                        UPDATE TB_PESSOAS 
-                                        SET nome = %s, turma = %s, sexo = %s, cpf = %s, curso = %s, sigla = %s, dt_nascimento = %s, nome_do_pai = %s 
-                                        WHERE matricula = %s
-                                    """
-                                    executar_query(
-                                        sql_upd_cad, 
-                                        params=(
-                                            novo_nome, 
-                                            nova_turma, 
-                                            novo_sexo, 
-                                            novo_cpf, 
-                                            novo_curso, 
-                                            nova_sigla, 
-                                            nova_dt_nasc, 
-                                            novo_pai, 
-                                            matricula_busca
-                                        ), 
-                                        fetch=False
-                                    )
+                                    # Montagem dinâmica da instrução UPDATE com base em todas as colunas da tabela
+                                    set_clauses = ", ".join([f"{k} = %s" for k in campos_atualizados.keys()])
+                                    sql_upd_cad = f"UPDATE TB_PESSOAS SET {set_clauses} WHERE matricula = %s"
+                                    
+                                    params = list(campos_atualizados.values()) + [matricula_busca]
+                                    executar_query(sql_upd_cad, params=params, fetch=False)
+                                    
                                     st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
                                     st.rerun()
                                 except Exception as e:
