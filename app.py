@@ -32,7 +32,7 @@ def executar_query(query, params=None, fetch=True):
         cursor.close()
         conexao.close()
 
-# --- FUNÇÃO PARA GERAR O PDF DO HISTÓRICO ESCOLAR EM MEMÓRIA ---
+# --- FUNÇÃO PARA GERAR O PDF DO HISTÓRICO ESCOLAR EM MEMÓRIA (COM CORREÇÃO DE SEGURANÇA) ---
 def gerar_pdf_historico_aluno(dados_aluno, df_historico):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -109,7 +109,7 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
     elements.append(t_ident)
     elements.append(Spacer(1, 0.1 * cm))
 
-    # Tabela Curricular
+    # Tabela Curricular com Tratamento Seguro de Notas
     header_comp = [
         Paragraph("<b>Componente Curricular (IDUC)</b>", cell_bold),
         Paragraph("<b>Semestre</b>", cell_center_bold),
@@ -125,13 +125,19 @@ def gerar_pdf_historico_aluno(dados_aluno, df_historico):
         components_data.append([Paragraph("Sem registos curriculares", cell_style), Paragraph("-", cell_center), Paragraph("-", cell_center), Paragraph("-", cell_center), Paragraph("-", cell_center), Paragraph("-", cell_center)])
     else:
         for _, row in df_historico.iterrows():
+            soma_val = str(row.get('soma', 0)).strip()
+            try:
+                nota_num = float(soma_val) if soma_val and soma_val != '.' else 0.0
+            except ValueError:
+                nota_num = 0.0
+
             components_data.append([
                 Paragraph(str(row.get('iduc', '')), cell_style),
                 Paragraph(str(row.get('turma', '')), cell_center),
                 Paragraph("50", cell_center),
                 Paragraph("Teoria", cell_center),
                 Paragraph("0", cell_center),
-                Paragraph("AP" if float(row.get('soma', 0) or 0) >= 5 else "AF", cell_center)
+                Paragraph("AP" if nota_num >= 5 else "AF", cell_center)
             ])
 
     t_comp = Table(components_data, colWidths=[9.0 * cm, 2.5 * cm, 1.5 * cm, 2.0 * cm, 1.5 * cm, 1.5 * cm])
