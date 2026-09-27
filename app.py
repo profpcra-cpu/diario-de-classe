@@ -1,5 +1,6 @@
 import streamlit as st
 from datetime import date
+from modulos.afin import renderizar_modulo_afin
 
 # Importação dos nossos blocos modulares criados na pasta 'modulos'
 from modulos.conexao import executar_query
