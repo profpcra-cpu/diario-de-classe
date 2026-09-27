@@ -4,7 +4,7 @@ from modulos.conexao import executar_query
 
 def renderizar_modulo_afin():
     st.subheader("📊 AFIN - Acompanhamento da Frequência e Conceito")
-    st.markdown("Matriz consolidada por Turma e Semestre, cruzando Faltas (`FAL`) e Conceitos/Resultados (`CON`) por Unidade Curricular.")
+    st.markdown("Matriz consolidada por Turma, cruzando notas, avaliações e frequência por Unidade Curricular.")
 
     # Filtros de Seleção (Turma e Semestre)
     col1, col2 = st.columns(2)
@@ -15,13 +15,13 @@ def renderizar_modulo_afin():
 
     if st.button("🔍 Carregar Matriz AFIN"):
         try:
-            # Query para buscar os dados dos alunos e respetivas avaliações/frequências da turma
+            # Query ajustada para usar as colunas reais e seguras da TB_AVALIACOES
             query_afin = """
-                SELECT P.matricula, P.nome, A.iduc, A.av1, A.av2, A.av3, A.soma, A.recup, A.conceito
+                SELECT P.matricula, P.nome, A.iduc, A.av1, A.av2, A.av3, A.soma, A.recup
                 FROM TB_PESSOAS P
                 LEFT JOIN TB_AVALIACOES A ON P.matricula = A.matrícula
                 WHERE P.turma = %s OR A.turma = %s
-                LIMIT 50
+                LIMIT 100
             """
             df_afin = executar_query(query_afin, params=(turma_selecionada, turma_selecionada))
 
@@ -35,7 +35,6 @@ def renderizar_modulo_afin():
                 df_editado = st.data_editor(df_afin, use_container_width=True, key="editor_tabela_afin")
 
                 if st.button("💾 Guardar Alterações da Matriz AFIN"):
-                    # Lógica de atualização em lote no MySQL
                     atualizacoes = 0
                     for _, row in df_editado.iterrows():
                         mat = row.get('matricula')
@@ -43,7 +42,7 @@ def renderizar_modulo_afin():
                         if mat and iduc:
                             sql_upd = """
                                 UPDATE TB_AVALIACOES 
-                                SET av1 = %s, av2 = %s, av3 = %s, soma = %s, recup = %s, conceito = %s 
+                                SET av1 = %s, av2 = %s, av3 = %s, soma = %s, recup = %s 
                                 WHERE matrícula = %s AND iduc = %s
                             """
                             executar_query(
@@ -54,7 +53,6 @@ def renderizar_modulo_afin():
                                     row.get('av3', 0), 
                                     row.get('soma', 0), 
                                     row.get('recup', 0), 
-                                    row.get('conceito', ''), 
                                     mat, 
                                     iduc
                                 ), 
