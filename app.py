@@ -290,36 +290,37 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                             df_historico_editado = st.data_editor(df_historico_aluno, use_container_width=True, key=f"historico_editor_{matricula_busca}")
                             
                             if st.button("💾 Guardar Alterações do Histórico"):
-                                try:
-                                    atualizados_hist = 0
-                                    for _, row in df_historico_editado.iterrows():
-                                        mat = row.get('matricula')
-                                        iduc_val = row.get('iduc')
-                                        
-                                        if mat and iduc_val:
-                                            sql_hist = """
-                                                UPDATE TB_DIARIO 
-                                                SET unidade_curricular = %s, carga_horaria = %s, modulo = %s, faltas = %s 
-                                                WHERE matricula = %s AND iduc = %s
-                                            """
-                                            executar_query(
-                                                sql_hist, 
-                                                params=(
-                                                    row.get('unidade_curricular'), 
-                                                    row.get('carga_horaria'), 
-                                                    row.get('modulo'), 
-                                                    row.get('faltas'), 
-                                                    mat, 
-                                                    iduc_val
-                                                ), 
-                                                fetch=False
-                                            )
-                                            atualizados_hist += 1
+                                with st.spinner("A guardar alterações na base de dados..."):
+                                    try:
+                                        atualizados_hist = 0
+                                        for _, row in df_historico_editado.iterrows():
+                                            mat = row.get('matricula')
+                                            iduc_val = row.get('iduc')
                                             
-                                    st.success(f"Sucesso! {atualizados_hist} registos do histórico foram guardados na base de dados!")
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(f"Erro ao guardar alterações no histórico: {e}")
+                                            if mat and iduc_val:
+                                                sql_hist = """
+                                                    UPDATE TB_DIARIO 
+                                                    SET unidade_curricular = %s, carga_horaria = %s, modulo = %s, faltas = %s 
+                                                    WHERE matricula = %s AND iduc = %s
+                                                """
+                                                executar_query(
+                                                    sql_hist, 
+                                                    params=(
+                                                        row.get('unidade_curricular'), 
+                                                        row.get('carga_horaria'), 
+                                                        row.get('modulo'), 
+                                                        row.get('faltas'), 
+                                                        mat, 
+                                                        iduc_val
+                                                    ), 
+                                                    fetch=False
+                                                )
+                                                atualizados_hist += 1
+                                                
+                                        st.success(f"Sucesso! {atualizados_hist} registos do histórico foram guardados na base de dados!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Erro ao guardar alterações no histórico: {e}")
                             
                         st.markdown("---")
                         st.markdown("### 🖨️ Central de Emissão de Documentos Acadêmicos")
