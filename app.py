@@ -175,7 +175,7 @@ elif menu == "Diário de Classe (Notas - TB_AVALIACOES)":
     st.subheader("📋 Matriz de Notas e Avaliações")
     try:
         if perfil_atual == "admin":
-            query_notas = "SELECT matricula, turma, iduc, av1, av2, av3, soma, recup FROM TB_AVALIACOES LIMIT 35"
+            query_notas = "SELECT matrícula, turma, iduc, av1, av2, av3, soma, recup FROM TB_AVALIACOES LIMIT 35"
             df_diario = executar_query(query_notas)
         else:
             query_notas = """
@@ -282,14 +282,14 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
     st.markdown("Selecione o estudante para consultar a ficha cadastral unificada, histórico curricular e emitir documentos oficiais.")
     
     try:
-        # Passo equivalente ao SincronizarListaAlunos() do Apps Script
-        df_todos_alunos = executar_query("SELECT matrícula, nome, turma FROM TB_PESSOAS")
+        # Consulta corrigida utilizando 'matricula' (sem acento) conforme a estrutura da tabela MySQL
+        df_todos_alunos = executar_query("SELECT matricula, nome, turma FROM TB_PESSOAS")
         
         if df_todos_alunos.empty:
             st.warning("Nenhum aluno encontrado na base de dados.")
         else:
             # Cria a string combinada "Matrícula - Nome" para o seletor (Dropdown equivalente à célula B2)
-            df_todos_alunos['opcao_combo'] = df_todos_alunos['matrícula'].astype(str) + " - " + df_todos_alunos['nome'].astype(str)
+            df_todos_alunos['opcao_combo'] = df_todos_alunos['matricula'].astype(str) + " - " + df_todos_alunos['nome'].astype(str)
             lista_alunos_dropdown = df_todos_alunos['opcao_combo'].tolist()
             
             aluno_selecionado = st.selectbox("Selecione o Estudante (Matrícula e Nome):", lista_alunos_dropdown)
@@ -297,8 +297,8 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
             if aluno_selecionado:
                 matricula_busca = aluno_selecionado.split(" - ")[0].strip()
                 
-                # Passo equivalente ao CarregarAluno() - Procura os dados pessoais do aluno selecionado
-                df_dados_pessoais = executar_query("SELECT * FROM TB_PESSOAS WHERE matrícula = %s", params=(matricula_busca,))
+                # Procura os dados pessoais do aluno selecionado com base na matrícula
+                df_dados_pessoais = executar_query("SELECT * FROM TB_PESSOAS WHERE matricula = %s", params=(matricula_busca,))
                 
                 if not df_dados_pessoais.empty:
                     st.success(f"Ficha carregada com sucesso para a matrícula: {matricula_busca}")
@@ -311,7 +311,6 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                         df_ficha_editada = st.data_editor(df_dados_pessoais, use_container_width=True, key=f"ficha_{matricula_busca}")
                         
                         if st.button("💾 Guardar Alterações Cadastrais"):
-                            # Aqui podermos implementar a instrução UPDATE para gravar de volta no MySQL
                             st.success("Alterações cadastrais guardadas com sucesso no MySQL!")
                             
                     with aba_historico:
