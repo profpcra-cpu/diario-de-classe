@@ -840,3 +840,16 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     doc.build(story, onFirstPage=_rodape, onLaterPages=_rodape)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def gerar_pdf_relatorio_turma(dados):
+    """
+    Função temporária/mock para evitar o ImportError.
+    Retorna um buffer vazio ou básico de PDF até a montagem da estrutura final do ReportLab.
+    """
+    import io
+    buffer = io.BytesIO()
+    # Retorna um buffer simples de bytes
+    buffer.write(b"%PDF-1.4 ... Relatorio da Turma em desenvolvimento ...")
+    buffer.seek(0)
+    return buffer.getvalue()
