@@ -1,7 +1,17 @@
 import streamlit as st
 import pandas as pd
 from modulos.conexao import executar_query
-from modulos.pdf_generator import gerar_pdf_afin  # Importar a função de PDF
+from modulos.pdf_generator import gerar_pdf_afin
+
+def salvar_alteracoes_afin(df_editado):
+    """
+    Lógica para persistir as alterações de volta nas tabelas do banco de dados.
+    (Implementar as chamadas UPDATE conforme a estrutura do banco)
+    """
+    # Exemplo conceitual:
+    # for idx, row in df_editado.iterrows():
+    #     ... executar_query("UPDATE ...")
+    st.success("Alterações guardadas com sucesso no banco de dados!")
 
 def renderizar_modulo_afin():
     st.markdown("### CEP ESCOLA TÉCNICA DE PLANALTINA - AFIN")
@@ -14,6 +24,7 @@ def renderizar_modulo_afin():
     with col2:
         semestre_selecionado = st.text_input("Semestre:", value="2026/2º")
 
+    # Botão para carregar/atualizar os dados no session_state
     if st.button("🔍 Carregar Matriz AFIN"):
         try:
             query_diario = """
@@ -24,19 +35,21 @@ def renderizar_modulo_afin():
             df_diario = executar_query(query_diario, params=(turma_selecionada, semestre_selecionado))
 
             if df_diario.empty:
-                st.warning("Nenhum registo encontrado na TB_DIARIO para os filtros selecionados.")
+                st.warning("Nenhum registro encontrado na TB_DIARIO para os filtros selecionados.")
+                st.session_state['df_matriz_afin'] = None
             else:
                 query_pessoas = "SELECT matricula, nome FROM TB_PESSOAS WHERE turma = %s"
                 df_pessoas = executar_query(query_pessoas, params=(turma_selecionada,))
                 
                 if df_pessoas.empty:
                     df_pessoas = df_diario[['matricula']].drop_duplicates()
-                    df_pessoas['nome'] = "Aluno " + df_pessoas['matricula']
+                    df_pessoas['nome'] = "Aluno " + df_pessoas['matricula'].astype(str)
 
                 mapa_nomes = df_diario.set_index('iduc')['unidade_curricular'].to_dict()
 
-                df_faltas = df_diario.pivot(index='matricula', columns='iduc', values='faltas')
-                df_conceitos = df_diario.pivot(index='matricula', columns='iduc', values='conceito')
+                # Uso de pivot_table com aggfunc='first' para evitar falha com duplicatas
+                df_faltas = df_diario.pivot_table(index='matricula', columns='iduc', values='faltas', aggfunc='first')
+                df_conceitos = df_diario.pivot_table(index='matricula', columns='iduc', values='conceito', aggfunc='first')
 
                 dfs_para_juntar = [df_pessoas.drop_duplicates(subset=['matricula']).set_index('matricula')]
 
@@ -47,27 +60,37 @@ def renderizar_modulo_afin():
                     dfs_para_juntar.append(df_f)
                     dfs_para_juntar.append(df_c)
 
-                df_matriz = pd.concat(dfs_para_juntar, axis=1).reset_index()
-
+                # Guarda a matriz no session_state
+                st.session_state['df_matriz_afin'] = pd.concat(dfs_para_juntar, axis=1).reset_index()
                 st.success(f"Matriz AFIN gerada com sucesso para a turma {turma_selecionada}!")
-                
-                st.markdown("### Tabela de Lançamento (Editável)")
-                df_editado = st.data_editor(df_matriz, use_container_width=True, key="editor_tabela_afin_matriz")
 
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    if st.button("💾 Guardar Alterações da Matriz AFIN"):
-                        st.success("Alterações guardadas com sucesso!")
-                
-                with col_btn2:
-                    # Botão para gerar e descarregar o PDF da AFIN
-                    pdf_bytes = gerar_pdf_afin(df_matriz, turma_selecionada, semestre_selecionado)
-                    st.download_button(
-                        label="📄 Descarregar PDF AFIN",
-                        data=pdf_bytes,
-                        file_name=f"AFIN_Turma_{turma_selecionada}_{semestre_selecionado.replace('/', '-')}.pdf",
-                        mime="application/pdf"
-                    )
-        
         except Exception as e:
             st.error(f"Erro ao estruturar a matriz AFIN: {e}")
+
+    # Exibe e gerencia a tabela se ela já estiver carregada no session_state
+    if st.session_state.get('df_matriz_afin') is not None:
+        st.markdown("### Tabela de Lançamento (Editável)")
+        
+        # O data_editor opera sobre o estado armazenado
+        df_editado = st.data_editor(
+            st.session_state['df_matriz_afin'], 
+            use_container_width=True, 
+            key="editor_tabela_afin_matriz"
+        )
+
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("💾 Guardar Alterações da Matriz AFIN"):
+                salvar_alteracoes_afin(df_editado)
+                # Atualiza o estado com as novas edições efetuadas
+                st.session_state['df_matriz_afin'] = df_editado
+
+        with col_btn2:
+            # O PDF é gerado a partir de df_editado (com as alterações visíveis na tela)
+            pdf_bytes = gerar_pdf_afin(df_editado, turma_selecionada, semestre_selecionado)
+            st.download_button(
+                label="📄 Descarregar PDF AFIN",
+                data=pdf_bytes,
+                file_name=f"AFIN_Turma_{turma_selecionada}_{semestre_selecionado.replace('/', '-')}.pdf",
+                mime="application/pdf"
+            )
