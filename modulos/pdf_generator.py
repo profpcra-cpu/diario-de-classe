@@ -4,13 +4,11 @@ import pandas as pd
 
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image,
-    KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from modulos.conexao import executar_query
 
@@ -18,11 +16,7 @@ from modulos.conexao import executar_query
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
     Gera o Histórico Escolar em A4, com diagramação institucional,
-    aproveitamento racional do espaço e área própria para assinaturas.
-
-    Mantém a estrutura de dados da versão anterior:
-      - df_historico: DataFrame com o histórico acadêmico;
-      - dados_aluno: dict ou DataFrame com os dados cadastrais.
+    alinhamento rigoroso de colunas e remoção da barra de seção do histórico.
     """
 
     # Compatibilidade com chamada invertida
@@ -32,7 +26,8 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     buffer = io.BytesIO()
 
     # ------------------------------------------------------------------
-    # CONFIGURAÇÃO DO DOCUMENTO
+    # CONFIGURAÇÃO DO DOCUMENTO (Largura útil exata: 554 pt)
+    # A4 = 595.27 de largura. Margens de 28 pt à esquerda e direita.
     # ------------------------------------------------------------------
     doc = SimpleDocTemplate(
         buffer,
@@ -52,11 +47,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     # ------------------------------------------------------------------
     CINZA_TEXTO = colors.HexColor("#263238")
     CINZA_MEDIO = colors.HexColor("#5F6B72")
-    CINZA_CLARO = colors.HexColor("#F2F4F5")
     CINZA_LINHA = colors.HexColor("#C8CED2")
     CINZA_CAB = colors.HexColor("#E7EAEC")
     PRETO = colors.HexColor("#111111")
-    BRANCO = colors.white
 
     # ------------------------------------------------------------------
     # ESTILOS
@@ -238,13 +231,11 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 and str(df_bl.iloc[0]["base_legal"]).strip()
             ):
                 base_legal_texto = str(df_bl.iloc[0]["base_legal"]).strip()
-
         except Exception:
-            # Mantém a base legal padrão caso a consulta não esteja disponível.
             pass
 
     # ------------------------------------------------------------------
-    # LOGOS
+    # LOGOS E CABEÇALHO
     # ------------------------------------------------------------------
     path_logo_gdf = "logo_gdf.png"
     path_logo_escola = "logo_escola.png"
@@ -306,20 +297,13 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ]))
         return t
 
-    def campo(label, texto, bold=False):
-        estilo = estilo_valor_bold if bold else estilo_valor
-        return [
-            Paragraph(label, estilo_label),
-            Paragraph(texto or "—", estilo)
-        ]
-
-    def tabela_campos(linhas, larguras, paddings=(4, 4)):
+    def tabela_campos(linhas, larguras):
         t = Table(linhas, colWidths=larguras)
         t.setStyle(TableStyle([
             ("GRID", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), paddings[0]),
-            ("RIGHTPADDING", (0, 0), (-1, -1), paddings[1]),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
             ("TOPPADDING", (0, 0), (-1, -1), 3),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
@@ -327,17 +311,12 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     story = []
 
-    # ------------------------------------------------------------------
-    # CABEÇALHO
-    # ------------------------------------------------------------------
+    # Cabeçalho e Título Principal
     story.append(cabecalho)
     story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo))
 
-    # ------------------------------------------------------------------
-    # IDENTIFICAÇÃO ACADÊMICA
-    # ------------------------------------------------------------------
+    # Identificação Acadêmica
     story.append(bloco_secao("IDENTIFICAÇÃO ACADÊMICA"))
-
     identificacao = [
         [
             Paragraph("CURSO", estilo_label),
@@ -350,18 +329,11 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
             Paragraph(turma or "—", estilo_valor),
         ],
     ]
-
-    story.append(tabela_campos(
-        identificacao,
-        [330, 95, 129]
-    ))
+    story.append(tabela_campos(identificacao, [330, 95, 129]))
     story.append(Spacer(1, 4))
 
-    # ------------------------------------------------------------------
-    # DADOS DO ESTUDANTE
-    # ------------------------------------------------------------------
+    # Dados do Estudante
     story.append(bloco_secao("DADOS DO ESTUDANTE"))
-
     dados_estudante = [
         [
             Paragraph("NOME", estilo_label),
@@ -391,24 +363,14 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         [
             Paragraph(nacionalidade or "—", estilo_valor),
             Paragraph(f"{naturalidade} / {uf}".strip(" /") or "—", estilo_valor),
-            Paragraph(
-                " ".join(x for x in [rg, orgao, dt_exp] if x) or "—",
-                estilo_valor
-            ),
+            Paragraph(" ".join(x for x in [rg, orgao, dt_exp] if x) or "—", estilo_valor),
         ],
     ]
-
-    story.append(tabela_campos(
-        dados_estudante,
-        [285, 150, 119]
-    ))
+    story.append(tabela_campos(dados_estudante, [285, 150, 119]))
     story.append(Spacer(1, 4))
 
-    # ------------------------------------------------------------------
-    # BASE LEGAL
-    # ------------------------------------------------------------------
+    # Base Legal
     story.append(bloco_secao("BASE LEGAL"))
-
     base_legal = Table(
         [[Paragraph(base_legal_texto, estilo_valor)]],
         colWidths=[554]
@@ -422,15 +384,13 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
-
     story.append(base_legal)
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # HISTÓRICO ACADÊMICO
+    # HISTÓRICO ACADÊMICO (Linha de seção "HISTÓRICO ACADÊMICO" removida)
+    # As larguras de colunas abaixo somam exatamente 554 pt para manter o alinhamento perfeito.
     # ------------------------------------------------------------------
-    story.append(bloco_secao("HISTÓRICO ACADÊMICO"))
-
     header_hist = [
         Paragraph("COMPONENTE CURRICULAR", estilo_th),
         Paragraph("SEM.", estilo_th),
@@ -465,10 +425,11 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 Paragraph(res, estilo_td),
             ])
 
+    # Larguras recalculadas para somar exatamente 554 pt alinhando com a margem global
     t_hist = Table(
         tabela_hist_dados,
         repeatRows=1,
-        colWidths=[300, 49, 36, 68, 44, 57],
+        colWidths=[274, 50, 35, 75, 55, 65],
         hAlign="LEFT"
     )
 
@@ -484,7 +445,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
     ]
 
-    # Listras muito discretas para facilitar a leitura.
     for i in range(1, len(tabela_hist_dados)):
         if i % 2 == 0:
             estilo_hist.append(
@@ -496,7 +456,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # RESUMO / LEGENDA
+    # RESUMO / LEGENDA (Ajustado para a mesma largura total de 554 pt)
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
@@ -528,12 +488,10 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     # LOCAL / DATA
     # ------------------------------------------------------------------
     data_documento = "PLANALTINA-DF, 27 DE SETEMBRO DE 2026"
-
     data_tabela = Table(
         [[Paragraph(data_documento, estilo_assinatura)]],
         colWidths=[554]
     )
-
     data_tabela.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -548,9 +506,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     # ------------------------------------------------------------------
     # ASSINATURAS
     # ------------------------------------------------------------------
-    # Dois espaços independentes e simétricos:
-    # 1. Diretor(a)
-    # 2. Chefe de Secretaria Escolar
     assinatura = Table(
         [[
             Paragraph(
@@ -580,11 +535,10 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(assinatura)
 
     # ------------------------------------------------------------------
-    # RODAPÉ DE PÁGINA
+    # RODAPÉ DE PÁGINA (CANVAS)
     # ------------------------------------------------------------------
     def desenhar_rodape(canvas, doc):
         canvas.saveState()
-
         largura, altura = A4
 
         canvas.setStrokeColor(CINZA_LINHA)
@@ -612,9 +566,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
         canvas.restoreState()
 
-    # ------------------------------------------------------------------
     # GERAÇÃO
-    # ------------------------------------------------------------------
     doc.build(
         story,
         onFirstPage=desenhar_rodape,
