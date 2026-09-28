@@ -4,7 +4,7 @@ import pandas as pd
 
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -16,7 +16,8 @@ from modulos.conexao import executar_query
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
     Gera o Histórico Escolar em A4, com diagramação institucional,
-    alinhamento rigoroso de colunas e primeira coluna ampliada.
+    alinhamento rigoroso de colunas, primeira coluna ampliada e
+    repetição correta de cabeçalhos e controle de quebra nas assinaturas.
     """
 
     # Compatibilidade com chamada invertida
@@ -389,8 +390,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     # ------------------------------------------------------------------
     # HISTÓRICO ACADÊMICO
-    # Primeira coluna ampliada para 314 pt; demais colunas reduzidas proporcionalmente.
-    # Total somando exatamente 554 pt.
     # ------------------------------------------------------------------
     header_hist = [
         Paragraph("COMPONENTE CURRICULAR", estilo_th),
@@ -456,7 +455,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # RESUMO / LEGENDA
+    # BLOCO FINAL (Legenda, Data e Assinaturas agrupados para evitar órfãos)
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
@@ -481,12 +480,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
 
-    story.append(rodape_legenda)
-    story.append(Spacer(1, 9))
-
-    # ------------------------------------------------------------------
-    # LOCAL / DATA
-    # ------------------------------------------------------------------
     data_documento = "PLANALTINA-DF, 27 DE SETEMBRO DE 2026"
     data_tabela = Table(
         [[Paragraph(data_documento, estilo_assinatura)]],
@@ -500,12 +493,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
-    story.append(data_tabela)
-    story.append(Spacer(1, 23))
-
-    # ------------------------------------------------------------------
-    # ASSINATURAS
-    # ------------------------------------------------------------------
     assinatura = Table(
         [[
             Paragraph(
@@ -532,7 +519,18 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
-    story.append(assinatura)
+    # Envolvemos legenda, data e assinaturas em um KeepTogether para que
+    # se não houver espaço suficiente na página atual, o bloco completo
+    # migre para a página seguinte junto com o restante da tabela.
+    bloco_final = KeepTogether([
+        rodape_legenda,
+        Spacer(1, 9),
+        data_tabela,
+        Spacer(1, 23),
+        assinatura
+    ])
+
+    story.append(bloco_final)
 
     # ------------------------------------------------------------------
     # RODAPÉ DE PÁGINA (CANVAS)
