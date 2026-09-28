@@ -590,7 +590,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
 
 
-
 # -*- coding: utf-8 -*-
 """Gerador profissional da Matriz AFIN - CEP ETP."""
 import io
@@ -667,8 +666,8 @@ def _mapa_iduc(mapa):
 def _estilos():
     base = getSampleStyleSheet()
     return {
-        'topo': ParagraphStyle('AFINTopo', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=9.5, alignment=TA_CENTER, textColor=colors.white),
-        'subtopo': ParagraphStyle('AFINSubTopo', parent=base['Normal'], fontName='Helvetica', fontSize=6.3, leading=7, alignment=TA_CENTER, textColor=colors.white),
+        'topo': ParagraphStyle('AFINTopo', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=9.5, alignment=TA_CENTER, textColor=AZUL),
+        'subtopo': ParagraphStyle('AFINSubTopo', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=6.3, leading=7, alignment=TA_CENTER, textColor=AZUL_2),
         'label': ParagraphStyle('AFINLabel', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=6.3, leading=7, alignment=TA_LEFT, textColor=AZUL),
         'valor': ParagraphStyle('AFINValor', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=7.5, leading=8.5, alignment=TA_LEFT, textColor=TEXTO),
         'th': ParagraphStyle('AFINTH', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=5.5, leading=6, alignment=TA_CENTER, textColor=colors.white),
@@ -698,13 +697,16 @@ def _topo(largura, st):
         [Paragraph('SECRETARIA DE ESTADO DE EDUCAÇÃO DO DISTRITO FEDERAL', st['topo'])],
         [Paragraph('CEP ETP — ESCOLA TÉCNICA DE PLANALTINA', st['topo'])],
         [Paragraph('AFIN — ACOMPANHAMENTO DA FORMAÇÃO E INFORMAÇÕES ACADÊMICAS', st['subtopo'])],
-    ], colWidths=[largura], rowHeights=[6.2*mm, 6.2*mm, 4.8*mm])
+    ], colWidths=[largura], rowHeights=[6.2*mm, 6.2*mm, 4.8*mm], hAlign='LEFT')
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,1), AZUL), ('BACKGROUND', (0,2), (-1,2), AZUL_2),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOX', (0,0), (-1,-1), .6, AZUL), ('LEFTPADDING', (0,0), (-1,-1), 4),
-        ('RIGHTPADDING', (0,0), (-1,-1), 4), ('TOPPADDING', (0,0), (-1,-1), 1),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+        ('BACKGROUND', (0, 0), (-1, -1), AZUL_CLARO),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOX', (0, 0), (-1, -1), .6, AZUL),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
     return t
 
@@ -714,13 +716,13 @@ def _identificacao(largura, turma, semestre, st):
     wv = (largura - 2*wl) / 2
     t = Table([[Paragraph('TURMA', st['label']), Paragraph(_html(turma), st['valor']),
                 Paragraph('SEMESTRE', st['label']), Paragraph(_html(semestre), st['valor'])]],
-              colWidths=[wl,wv,wl,wv], rowHeights=[8*mm])
+              colWidths=[wl, wv, wl, wv], rowHeights=[8*mm], hAlign='LEFT')
     t.setStyle(TableStyle([
-        ('BACKGROUND',(0,0),(0,0),AZUL_CLARO), ('BACKGROUND',(2,0),(2,0),AZUL_CLARO),
-        ('BOX',(0,0),(-1,-1),.5,CINZA_3), ('INNERGRID',(0,0),(-1,-1),.5,CINZA_3),
-        ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('LEFTPADDING',(0,0),(-1,-1),4),
-        ('RIGHTPADDING',(0,0),(-1,-1),4), ('TOPPADDING',(0,0),(-1,-1),1),
-        ('BOTTOMPADDING',(0,0),(-1,-1),1),
+        ('BACKGROUND', (0, 0), (0, 0), AZUL_CLARO), ('BACKGROUND', (2, 0), (2, 0), AZUL_CLARO),
+        ('BOX', (0, 0), (-1, -1), .5, CINZA_3), ('INNERGRID', (0, 0), (-1, -1), .5, CINZA_3),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4), ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
     return t
 
@@ -743,12 +745,12 @@ def _cabecalho(bloco, mapa, wm, wn, wc, st):
         l1.append(Paragraph(_html(uc), st['uc']))
         l2.append(Paragraph(_html(iduc), st['iduc']))
         l3.append(Paragraph('F' if tipo == 'FAL' else 'C' if tipo == 'CON' else '', st['th']))
-    return [l1,l2,l3], larguras
+    return [l1, l2, l3], larguras
 
 
 def _tabela(df, bloco, mapa, wm, wn, wc, st):
     cab, larguras = _cabecalho(bloco, mapa, wm, wn, wc, st)
-    pos = {c:i for i,c in enumerate(df.columns)}
+    pos = {c: i for i, c in enumerate(df.columns)}
     linhas = list(cab)
     for _, row in df.iterrows():
         linha = [Paragraph(_html(row.iloc[0]), st['td']), Paragraph(_html(row.iloc[1]), st['nome'])]
@@ -759,22 +761,22 @@ def _tabela(df, bloco, mapa, wm, wn, wc, st):
 
     t = Table(linhas, colWidths=larguras, repeatRows=3, hAlign='LEFT')
     comandos = [
-        ('BACKGROUND',(0,0),(1,2),AZUL), ('BACKGROUND',(2,0),(-1,0),CINZA_2),
-        ('BACKGROUND',(2,1),(-1,1),AZUL_CLARO), ('BACKGROUND',(2,2),(-1,2),AZUL),
-        ('BACKGROUND',(0,3),(1,-1),colors.white), ('BACKGROUND',(2,3),(-1,-1),CINZA_1),
-        ('GRID',(0,0),(-1,-1),.35,CINZA_3), ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-        ('ALIGN',(0,0),(-1,-1),'CENTER'), ('ALIGN',(1,3),(1,-1),'LEFT'),
-        ('TOPPADDING',(0,0),(-1,-1),1.1), ('BOTTOMPADDING',(0,0),(-1,-1),1.1),
-        ('LEFTPADDING',(0,0),(-1,-1),1.1), ('RIGHTPADDING',(0,0),(-1,-1),1.1),
+        ('BACKGROUND', (0, 0), (1, 2), AZUL), ('BACKGROUND', (2, 0), (-1, 0), CINZA_2),
+        ('BACKGROUND', (2, 1), (-1, 1), AZUL_CLARO), ('BACKGROUND', (2, 2), (-1, 2), AZUL),
+        ('BACKGROUND', (0, 3), (1, -1), colors.white), ('BACKGROUND', (2, 3), (-1, -1), CINZA_1),
+        ('GRID', (0, 0), (-1, -1), .35, CINZA_3), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('ALIGN', (1, 3), (1, -1), 'LEFT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.1),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1.1), ('RIGHTPADDING', (0, 0), (-1, -1), 1.1),
     ]
     for j, c in enumerate(bloco, start=2):
         if c is None:
             continue
         tipo = _tipo_coluna(c)
         if tipo == 'FAL':
-            comandos.append(('BACKGROUND',(j,2),(j,-1),FAL_BG))
+            comandos.append(('BACKGROUND', (j, 2), (j, -1), FAL_BG))
         elif tipo == 'CON':
-            comandos.append(('BACKGROUND',(j,2),(j,-1),CON_BG))
+            comandos.append(('BACKGROUND', (j, 2), (j, -1), CON_BG))
     t.setStyle(TableStyle(comandos))
     return t
 
