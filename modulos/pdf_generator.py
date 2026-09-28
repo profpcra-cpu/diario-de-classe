@@ -394,7 +394,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     # HISTÓRICO ACADÊMICO (Soma exata: 314 + 40 + 30 + 65 + 45 + 60 = 554 pt)
     # ------------------------------------------------------------------
     header_hist = [
-        Paragraph("COMPONENTE CURRICULAR", estilo_th),
+        Paragraph("UNIDADE CURRICULAR", estilo_th),
         Paragraph("SEM.", estilo_th),
         Paragraph("CH", estilo_th),
         Paragraph("MÓDULO", estilo_th),
