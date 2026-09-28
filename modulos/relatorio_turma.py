@@ -19,7 +19,7 @@ def renderizar_modulo_relatorio_turma():
     # Botão para consultar e carregar os dados
     if st.button("🔍 Gerar Relatório da Turma"):
         try:
-            # Consulta 1: Dados Cadastrais dos Alunos da Turma (SELECT * previne erro de coluna ausente)
+            # Consulta 1: Dados Cadastrais dos Alunos da Turma
             query_pessoas = """
                 SELECT * 
                 FROM TB_PESSOAS 
@@ -69,6 +69,9 @@ def renderizar_modulo_relatorio_turma():
                         dfs_juntar.extend([df_f, df_c])
 
                     df_matriz_turma = pd.concat(dfs_juntar, axis=1).reset_index()
+
+                    # REMOVE COLUNAS DUPLICADAS PARA EVITAR ERRO NO ST.DATAFRAME
+                    df_matriz_turma = df_matriz_turma.loc[:, ~df_matriz_turma.columns.duplicated()].copy()
 
                 # Guardar todos os DataFrames no Session State
                 st.session_state['relatorio_turma_dados'] = {
@@ -124,18 +127,23 @@ def renderizar_modulo_relatorio_turma():
         with tab_matriz:
             st.markdown("#### Visão Matricial (Desempenho e Frequência por UC)")
             if not df_matriz.empty:
-                st.dataframe(df_matriz, use_container_width=True)
+                # Garante que não existem colunas duplicadas antes da exibição
+                df_matriz_exibir = df_matriz.loc[:, ~df_matriz.columns.duplicated()].copy()
+                st.dataframe(df_matriz_exibir, use_container_width=True)
             else:
                 st.info("Nenhum lançamento de diário encontrado para gerar a matriz.")
 
         with tab_alunos:
             st.markdown("#### Dados Cadastrais dos Estudantes da Turma")
-            st.dataframe(df_pessoas, use_container_width=True)
+            if not df_pessoas.empty:
+                df_pessoas_exibir = df_pessoas.loc[:, ~df_pessoas.columns.duplicated()].copy()
+                st.dataframe(df_pessoas_exibir, use_container_width=True)
 
         with tab_resumo:
             st.markdown("#### Registros Detalhados do Diário")
             if not df_diario.empty:
-                st.dataframe(df_diario, use_container_width=True)
+                df_diario_exibir = df_diario.loc[:, ~df_diario.columns.duplicated()].copy()
+                st.dataframe(df_diario_exibir, use_container_width=True)
             else:
                 st.info("Sem registros no diário.")
 
