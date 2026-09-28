@@ -19,7 +19,7 @@ def renderizar_modulo_relatorio_turma():
     # Botão para consultar e carregar os dados
     if st.button("🔍 Gerar Relatório da Turma"):
         try:
-            # Consulta 1: Dados Cadastrais dos Alunos da Turma
+            # Consulta 1: Dados Cadastrais dos Alunos da Turma (SELECT * previne erro de coluna ausente)
             query_pessoas = """
                 SELECT * 
                 FROM TB_PESSOAS 
@@ -32,7 +32,7 @@ def renderizar_modulo_relatorio_turma():
                 st.warning(f"Nenhum aluno encontrado na TB_PESSOAS para a turma '{turma_selecionada}'.")
                 st.session_state['relatorio_turma_dados'] = None
             else:
-                # Se a coluna 'situacao' não existir na tabela, cria uma coluna fictícia
+                # Se a coluna 'situacao' não existir na tabela, cria uma coluna padronizada
                 if 'situacao' not in df_pessoas.columns:
                     df_pessoas['situacao'] = 'N/A'
 
@@ -102,9 +102,12 @@ def renderizar_modulo_relatorio_turma():
         else:
             m2.metric("Alunos Ativos", "N/A")
 
+        # Tratamento seguro para valores de faltas (evita erro com NaN / None)
         if not df_diario.empty and 'faltas' in df_diario.columns:
-            total_faltas = int(df_diario['faltas'].sum())
-            media_faltas = round(df_diario['faltas'].mean(), 1)
+            faltas_numericas = pd.to_numeric(df_diario['faltas'], errors='coerce').fillna(0)
+            total_faltas = int(faltas_numericas.sum())
+            media_faltas = round(faltas_numericas.mean(), 1) if len(faltas_numericas) > 0 else 0
+            
             m3.metric("Total de Faltas", total_faltas)
             m4.metric("Média de Faltas / UC", media_faltas)
         else:
