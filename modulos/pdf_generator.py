@@ -589,7 +589,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     return buffer.getvalue()
 
 
-
 # -*- coding: utf-8 -*-
 """Gerador profissional da Matriz AFIN - CEP ETP."""
 import io
@@ -603,7 +602,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 
 # ============================================================
-# CONFIGURAÇÕES
+# CONFIGURAÇÕES DE CORES REEQUILIBRADAS
 # ============================================================
 COLUNAS_MATRIZ_POR_PAGINA = 21
 MARGEM_ESQ = 10 * mm
@@ -613,15 +612,17 @@ MARGEM_INF = 10 * mm
 LARGURA_MATRICULA = 23 * mm
 LARGURA_ESTUDANTE = 47 * mm
 
+# Nova paleta mais equilibrada e suave
 AZUL = colors.HexColor('#163A63')
 AZUL_2 = colors.HexColor('#244F7D')
+AZUL_SUAVE = colors.HexColor('#3B6E9E')       # Novo tom intermediário para equilibrar cabeçalhos
 AZUL_CLARO = colors.HexColor('#EAF1F8')
-CINZA_1 = colors.HexColor('#F7F9FB')
+CINZA_1 = colors.HexColor('#FAFBFC')        # Fundo de linha mais sutil
 CINZA_2 = colors.HexColor('#E7ECF2')
 CINZA_3 = colors.HexColor('#D5DDE6')
 TEXTO = colors.HexColor('#25313D')
-FAL_BG = colors.HexColor('#FFF4E5')
-CON_BG = colors.HexColor('#EAF6EE')
+FAL_BG = colors.HexColor('#FFF8F0')         # Tom de alerta mais suave para Faltas
+CON_BG = colors.HexColor('#F0F8F4')         # Tom de sucesso mais suave para Conceitos
 
 
 def _texto(valor):
@@ -679,9 +680,6 @@ def _estilos():
 
 
 def _blocos(colunas):
-    """Divide as colunas reais em blocos de exatamente 21 posições.
-    Somente o último bloco recebe colunas vazias; nenhuma coluna real é repetida.
-    """
     if not colunas:
         return [[None] * COLUNAS_MATRIZ_POR_PAGINA]
     saida = []
@@ -760,14 +758,23 @@ def _tabela(df, bloco, mapa, wm, wn, wc, st):
         linhas.append(linha)
 
     t = Table(linhas, colWidths=larguras, repeatRows=3, hAlign='LEFT')
+    
+    # Reequilíbrio aplicado nos blocos de fundo do cabeçalho da tabela
     comandos = [
-        ('BACKGROUND', (0, 0), (1, 2), AZUL), ('BACKGROUND', (2, 0), (-1, 0), CINZA_2),
-        ('BACKGROUND', (2, 1), (-1, 1), AZUL_CLARO), ('BACKGROUND', (2, 2), (-1, 2), AZUL),
-        ('BACKGROUND', (0, 3), (1, -1), colors.white), ('BACKGROUND', (2, 3), (-1, -1), CINZA_1),
-        ('GRID', (0, 0), (-1, -1), .35, CINZA_3), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('ALIGN', (1, 3), (1, -1), 'LEFT'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1.1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1.1),
-        ('LEFTPADDING', (0, 0), (-1, -1), 1.1), ('RIGHTPADDING', (0, 0), (-1, -1), 1.1),
+        ('BACKGROUND', (0, 0), (1, 2), AZUL), 
+        ('BACKGROUND', (2, 0), (-1, 0), AZUL_CLARO),  # Linha superior do cabeçalho mais suave
+        ('BACKGROUND', (2, 1), (-1, 1), CINZA_2),      # IDUC com cinza claro elegante
+        ('BACKGROUND', (2, 2), (-1, 2), AZUL_SUAVE),  # Linha de indicadores (F/C) com azul intermediário
+        ('BACKGROUND', (0, 3), (1, -1), colors.white), 
+        ('BACKGROUND', (2, 3), (-1, -1), CINZA_1),
+        ('GRID', (0, 0), (-1, -1), .35, CINZA_3), 
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'), 
+        ('ALIGN', (1, 3), (1, -1), 'LEFT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.1), 
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.1),
+        ('LEFTPADDING', (0, 0), (-1, -1), 1.1), 
+        ('RIGHTPADDING', (0, 0), (-1, -1), 1.1),
     ]
     for j, c in enumerate(bloco, start=2):
         if c is None:
@@ -777,6 +784,7 @@ def _tabela(df, bloco, mapa, wm, wn, wc, st):
             comandos.append(('BACKGROUND', (j, 2), (j, -1), FAL_BG))
         elif tipo == 'CON':
             comandos.append(('BACKGROUND', (j, 2), (j, -1), CON_BG))
+            
     t.setStyle(TableStyle(comandos))
     return t
 
