@@ -19,18 +19,22 @@ def renderizar_modulo_relatorio_turma():
     # Botão para consultar e carregar os dados
     if st.button("🔍 Gerar Relatório da Turma"):
         try:
-            # Consulta 1: Dados Cadastrais dos Alunos da Turma
-            query_pessoas = """
-                SELECT matricula, nome, situacao, email, telefone 
-                FROM TB_PESSOAS 
-                WHERE turma = %s
-                ORDER BY nome
-            """
-            df_pessoas = executar_query(query_pessoas, params=(turma_selecionada,))
+           # Consulta 1: Dados Cadastrais dos Alunos da Turma (usando SELECT * para evitar erro de coluna ausente)
+query_pessoas = """
+    SELECT * 
+    FROM TB_PESSOAS 
+    WHERE turma = %s
+    ORDER BY nome
+"""
+df_pessoas = executar_query(query_pessoas, params=(turma_selecionada,))
 
-            if df_pessoas.empty:
-                st.warning(f"Nenhum aluno encontrado na TB_PESSOAS para a turma '{turma_selecionada}'.")
-                st.session_state['relatorio_turma_dados'] = None
+if df_pessoas.empty:
+    st.warning(f"Nenhum aluno encontrado na TB_PESSOAS para a turma '{turma_selecionada}'.")
+    st.session_state['relatorio_turma_dados'] = None
+else:
+    # Se a coluna 'situacao' não existir na tabela, cria uma coluna fictícia ou ignora no indicador
+    if 'situacao' not in df_pessoas.columns:
+        df_pessoas['situacao'] = 'N/A'
             else:
                 # Consulta 2: Diário completo da Turma
                 if semestre_filtro != "Todos" and semestre_filtro.strip() != "":
