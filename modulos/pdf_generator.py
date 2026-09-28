@@ -591,194 +591,242 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
 
 
+# -*- coding: utf-8 -*-
+"""Gerador profissional da Matriz AFIN - CEP ETP."""
+import io
+import re
+import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+COLUNAS_MATRIZ_POR_PAGINA = 21
+MARGEM_ESQ = 10 * mm
+MARGEM_DIR = 10 * mm
+MARGEM_SUP = 9 * mm
+MARGEM_INF = 10 * mm
+LARGURA_MATRICULA = 23 * mm
+LARGURA_ESTUDANTE = 47 * mm
+
+AZUL = colors.HexColor('#163A63')
+AZUL_2 = colors.HexColor('#244F7D')
+AZUL_CLARO = colors.HexColor('#EAF1F8')
+CINZA_1 = colors.HexColor('#F7F9FB')
+CINZA_2 = colors.HexColor('#E7ECF2')
+CINZA_3 = colors.HexColor('#D5DDE6')
+TEXTO = colors.HexColor('#25313D')
+FAL_BG = colors.HexColor('#FFF4E5')
+CON_BG = colors.HexColor('#EAF6EE')
+
+
+def _texto(valor):
+    if valor is None:
+        return ''
+    try:
+        if pd.isna(valor):
+            return ''
+    except Exception:
+        pass
+    s = str(valor).strip()
+    return '' if s.lower() in {'nan', 'nat', 'none'} else s
+
+
+def _html(valor):
+    return (_texto(valor).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+
+def _normalizar(valor):
+    return re.sub(r'\s+', ' ', _texto(valor).upper()).strip()
+
+
+def _tipo_coluna(nome):
+    s = _normalizar(nome)
+    if re.search(r'(?:^|[\s_-])(?:FAL|FALTAS)(?:$|[\s_-])', s):
+        return 'FAL'
+    if re.search(r'(?:^|[\s_-])(?:CON|CONCEITO)(?:$|[\s_-])', s):
+        return 'CON'
+    return None
+
+
+def _nome_uc(nome):
+    return re.sub(r'\s*[-–—]\s*(?:FAL|FALTAS|CON|CONCEITO)\s*$', '', _texto(nome), flags=re.I).strip()
+
+
+def _mapa_iduc(mapa):
+    if not mapa:
+        return {}
+    return {_normalizar(nome): _texto(iduc) for iduc, nome in mapa.items() if _texto(nome)}
+
+
+def _estilos():
+    base = getSampleStyleSheet()
+    return {
+        'topo': ParagraphStyle('AFINTopo', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=9.5, alignment=TA_CENTER, textColor=colors.white),
+        'subtopo': ParagraphStyle('AFINSubTopo', parent=base['Normal'], fontName='Helvetica', fontSize=6.3, leading=7, alignment=TA_CENTER, textColor=colors.white),
+        'label': ParagraphStyle('AFINLabel', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=6.3, leading=7, alignment=TA_LEFT, textColor=AZUL),
+        'valor': ParagraphStyle('AFINValor', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=7.5, leading=8.5, alignment=TA_LEFT, textColor=TEXTO),
+        'th': ParagraphStyle('AFINTH', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=5.5, leading=6, alignment=TA_CENTER, textColor=colors.white),
+        'uc': ParagraphStyle('AFINUC', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=5.2, leading=5.7, alignment=TA_CENTER, textColor=TEXTO),
+        'iduc': ParagraphStyle('AFINIDUC', parent=base['Normal'], fontName='Helvetica-Bold', fontSize=5.1, leading=5.6, alignment=TA_CENTER, textColor=AZUL),
+        'td': ParagraphStyle('AFINTD', parent=base['Normal'], fontName='Helvetica', fontSize=6.1, leading=6.8, alignment=TA_CENTER, textColor=TEXTO),
+        'nome': ParagraphStyle('AFINNome', parent=base['Normal'], fontName='Helvetica', fontSize=6.1, leading=6.8, alignment=TA_LEFT, textColor=TEXTO),
+    }
+
+
+def _blocos(colunas):
+    """Divide as colunas reais em blocos de exatamente 21 posições.
+    Somente o último bloco recebe colunas vazias; nenhuma coluna real é repetida.
+    """
+    if not colunas:
+        return [[None] * COLUNAS_MATRIZ_POR_PAGINA]
+    saida = []
+    for i in range(0, len(colunas), COLUNAS_MATRIZ_POR_PAGINA):
+        bloco = list(colunas[i:i + COLUNAS_MATRIZ_POR_PAGINA])
+        bloco.extend([None] * (COLUNAS_MATRIZ_POR_PAGINA - len(bloco)))
+        saida.append(bloco)
+    return saida
+
+
+def _topo(largura, st):
+    t = Table([
+        [Paragraph('SECRETARIA DE ESTADO DE EDUCAÇÃO DO DISTRITO FEDERAL', st['topo'])],
+        [Paragraph('CEP ETP — ESCOLA TÉCNICA DE PLANALTINA', st['topo'])],
+        [Paragraph('AFIN — ACOMPANHAMENTO DA FORMAÇÃO E INFORMAÇÕES ACADÊMICAS', st['subtopo'])],
+    ], colWidths=[largura], rowHeights=[6.2*mm, 6.2*mm, 4.8*mm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,1), AZUL), ('BACKGROUND', (0,2), (-1,2), AZUL_2),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOX', (0,0), (-1,-1), .6, AZUL), ('LEFTPADDING', (0,0), (-1,-1), 4),
+        ('RIGHTPADDING', (0,0), (-1,-1), 4), ('TOPPADDING', (0,0), (-1,-1), 1),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 1),
+    ]))
+    return t
+
+
+def _identificacao(largura, turma, semestre, st):
+    wl = 25*mm
+    wv = (largura - 2*wl) / 2
+    t = Table([[Paragraph('TURMA', st['label']), Paragraph(_html(turma), st['valor']),
+                Paragraph('SEMESTRE', st['label']), Paragraph(_html(semestre), st['valor'])]],
+              colWidths=[wl,wv,wl,wv], rowHeights=[8*mm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(0,0),AZUL_CLARO), ('BACKGROUND',(2,0),(2,0),AZUL_CLARO),
+        ('BOX',(0,0),(-1,-1),.5,CINZA_3), ('INNERGRID',(0,0),(-1,-1),.5,CINZA_3),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('RIGHTPADDING',(0,0),(-1,-1),4), ('TOPPADDING',(0,0),(-1,-1),1),
+        ('BOTTOMPADDING',(0,0),(-1,-1),1),
+    ]))
+    return t
+
+
+def _cabecalho(bloco, mapa, wm, wn, wc, st):
+    l1 = [Paragraph('MATRÍCULA', st['th']), Paragraph('ESTUDANTE', st['th'])]
+    l2 = [Paragraph('', st['th']), Paragraph('', st['th'])]
+    l3 = [Paragraph('', st['th']), Paragraph('', st['th'])]
+    larguras = [wm, wn]
+    for nome_col in bloco:
+        larguras.append(wc)
+        if nome_col is None:
+            l1.append(Paragraph('', st['uc']))
+            l2.append(Paragraph('', st['iduc']))
+            l3.append(Paragraph('', st['th']))
+            continue
+        uc = _nome_uc(nome_col)
+        iduc = mapa.get(_normalizar(uc), '')
+        tipo = _tipo_coluna(nome_col)
+        l1.append(Paragraph(_html(uc), st['uc']))
+        l2.append(Paragraph(_html(iduc), st['iduc']))
+        l3.append(Paragraph('F' if tipo == 'FAL' else 'C' if tipo == 'CON' else '', st['th']))
+    return [l1,l2,l3], larguras
+
+
+def _tabela(df, bloco, mapa, wm, wn, wc, st):
+    cab, larguras = _cabecalho(bloco, mapa, wm, wn, wc, st)
+    pos = {c:i for i,c in enumerate(df.columns)}
+    linhas = list(cab)
+    for _, row in df.iterrows():
+        linha = [Paragraph(_html(row.iloc[0]), st['td']), Paragraph(_html(row.iloc[1]), st['nome'])]
+        for c in bloco:
+            valor = '' if c is None else _texto(row.iloc[pos[c]])
+            linha.append(Paragraph(_html(valor), st['td']))
+        linhas.append(linha)
+
+    t = Table(linhas, colWidths=larguras, repeatRows=3, hAlign='LEFT')
+    comandos = [
+        ('BACKGROUND',(0,0),(1,2),AZUL), ('BACKGROUND',(2,0),(-1,0),CINZA_2),
+        ('BACKGROUND',(2,1),(-1,1),AZUL_CLARO), ('BACKGROUND',(2,2),(-1,2),AZUL),
+        ('BACKGROUND',(0,3),(1,-1),colors.white), ('BACKGROUND',(2,3),(-1,-1),CINZA_1),
+        ('GRID',(0,0),(-1,-1),.35,CINZA_3), ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('ALIGN',(0,0),(-1,-1),'CENTER'), ('ALIGN',(1,3),(1,-1),'LEFT'),
+        ('TOPPADDING',(0,0),(-1,-1),1.1), ('BOTTOMPADDING',(0,0),(-1,-1),1.1),
+        ('LEFTPADDING',(0,0),(-1,-1),1.1), ('RIGHTPADDING',(0,0),(-1,-1),1.1),
+    ]
+    for j, c in enumerate(bloco, start=2):
+        if c is None:
+            continue
+        tipo = _tipo_coluna(c)
+        if tipo == 'FAL':
+            comandos.append(('BACKGROUND',(j,2),(j,-1),FAL_BG))
+        elif tipo == 'CON':
+            comandos.append(('BACKGROUND',(j,2),(j,-1),CON_BG))
+    t.setStyle(TableStyle(comandos))
+    return t
+
+
+def _rodape(canvas, doc):
+    canvas.saveState()
+    w, _ = landscape(A4)
+    y = 5.5*mm
+    canvas.setStrokeColor(CINZA_3)
+    canvas.setLineWidth(.5)
+    canvas.line(MARGEM_ESQ, y+4*mm, w-MARGEM_DIR, y+4*mm)
+    canvas.setFont('Helvetica', 5.8)
+    canvas.setFillColor(colors.HexColor('#66727E'))
+    canvas.drawString(MARGEM_ESQ, y, 'CEP ETP — Matriz AFIN')
+    canvas.drawRightString(w-MARGEM_DIR, y, f'Página {doc.page}')
+    canvas.restoreState()
+
+
 def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
-    """Gera o PDF consolidado da Matriz AFIN em formato paisagem com a nova paleta de cores e colunas compactas."""
+    """Gera o PDF consolidado da Matriz AFIN em A4 paisagem."""
+    if df_matriz is None:
+        df_matriz = pd.DataFrame()
+    if not isinstance(df_matriz, pd.DataFrame):
+        raise TypeError('df_matriz deve ser um pandas.DataFrame.')
+    if not df_matriz.empty and len(df_matriz.columns) < 2:
+        raise ValueError('A matriz deve possuir pelo menos Matrícula e Estudante.')
+
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=15, leftMargin=15, topMargin=15, bottomMargin=15)
+    pagina = landscape(A4)
+    w, _ = pagina
+    largura_util = w - MARGEM_ESQ - MARGEM_DIR
+    doc = SimpleDocTemplate(buffer, pagesize=pagina, leftMargin=MARGEM_ESQ, rightMargin=MARGEM_DIR,
+                            topMargin=MARGEM_SUP, bottomMargin=MARGEM_INF,
+                            title='Matriz AFIN', author='CEP ETP — Escola Técnica de Planaltina')
+    st = _estilos()
+    mapa = _mapa_iduc(mapa_nomes_iduc)
+    colunas = list(df_matriz.columns[2:]) if not df_matriz.empty else []
+    blocos = _blocos(colunas)
+
+    largura_restante = largura_util - LARGURA_MATRICULA - LARGURA_ESTUDANTE
+    largura_coluna = largura_restante / COLUNAS_MATRIZ_POR_PAGINA
     story = []
-    
-    styles = getSampleStyleSheet()
-    
-    estilo_topo = ParagraphStyle(
-        'TopoAFIN',
-        parent=styles['Heading1'],
-        fontSize=10,
-        alignment=1,
-        textColor=colors.whitesmoke,
-        fontName='Helvetica-Bold'
-    )
-    
-    estilo_info_label = ParagraphStyle(
-        'InfoLabelAFIN',
-        parent=styles['Normal'],
-        fontSize=8,
-        alignment=1,
-        textColor=colors.HexColor("#1A202C"),
-        fontName='Helvetica-Bold'
-    )
 
-    estilo_info_val = ParagraphStyle(
-        'InfoValAFIN',
-        parent=styles['Normal'],
-        fontSize=9,
-        alignment=1,
-        textColor=colors.HexColor("#1A202C"),
-        fontName='Helvetica-Bold'
-    )
-    
-    estilo_th = ParagraphStyle(
-        'THAFIN',
-        parent=styles['Normal'],
-        fontSize=6,
-        alignment=1,
-        textColor=colors.HexColor("#1A202C"),
-        fontName='Helvetica-Bold'
-    )
+    for i, bloco in enumerate(blocos):
+        if i:
+            story.append(PageBreak())
+        story.append(_topo(largura_util, st))
+        story.append(Spacer(1, 2*mm))
+        story.append(_identificacao(largura_util, turma, semestre, st))
+        story.append(Spacer(1, 2*mm))
+        story.append(_tabela(df_matriz, bloco, mapa, LARGURA_MATRICULA, LARGURA_ESTUDANTE, largura_coluna, st))
 
-    estilo_th_top = ParagraphStyle(
-        'THAffinTop',
-        parent=styles['Normal'],
-        fontSize=6,
-        alignment=1,
-        textColor=colors.whitesmoke,
-        fontName='Helvetica-Bold'
-    )
-    
-    estilo_td = ParagraphStyle(
-        'TDAFIN',
-        parent=styles['Normal'],
-        fontSize=7,
-        alignment=1,
-        textColor=colors.HexColor("#2D3748"),
-        fontName='Helvetica'
-    )
-
-    estilo_td_nome = ParagraphStyle(
-        'TDAFINNome',
-        parent=styles['Normal'],
-        fontSize=7,
-        alignment=0,
-        textColor=colors.HexColor("#2D3748"),
-        fontName='Helvetica'
-    )
-
-    largura_total = 762  # 792 - 30 de margens
-    larg_matr = 65
-    larg_nome = 150
-    
-    colunas_originais = list(df_matriz.columns) if df_matriz is not None and not df_matriz.empty else []
-    num_disciplinas = max(1, (len(colunas_originais) - 2) // 2)
-    
-    larg_restante = largura_total - (larg_matr + larg_nome)
-    larg_dupla = larg_restante / num_disciplinas
-    larg_col_uc = larg_dupla / 2.0
-
-    # 1. Cabeçalho Superior Institucional (Azul Real)[cite: 7]
-    tabela_topo = Table([
-        [Paragraph("<b>SEEDF &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; CEP ETP - AFIN &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; CURSO: TÉCNICO EM SECRETARIA ESCOLAR</b>", estilo_topo)]
-    ], colWidths=[largura_total])
-    
-    tabela_topo.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#0000CC")), # Azul Real Forte
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-    ]))
-    
-    story.append(tabela_topo)
-    story.append(Spacer(1, 2))
-
-    # 2. Informações de Semestre e Turma (Fundo Creme/Amarelado)[cite: 7]
-    tabela_info = Table([
-        [Paragraph("SEMESTRE", estilo_info_label), Paragraph(f"<b>{semestre}</b>", estilo_info_val)],
-        [Paragraph("TURMA", estilo_info_label), Paragraph(f"<b>{turma}</b>", estilo_info_val)]
-    ], colWidths=[larg_matr, larg_nome + larg_restante])
-    
-    tabela_info.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#FFFBEB")), # Tom Creme Suave nas labels
-        ('BACKGROUND', (1, 0), (1, -1), colors.HexColor("#FEF3C7")), # Tom Amarelado Suave nos valores
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
-    ]))
-    story.append(tabela_info)
-    story.append(Spacer(1, 2))
-
-    # 3. Construção das linhas de cabeçalho da matriz
-    header_linha_disc = [Paragraph("<b>MATRÍCULA</b>", estilo_th_top), Paragraph("<b>ESTUDANTE</b>", estilo_th_top)]
-    header_linha_iduc = [Paragraph("", estilo_th_top), Paragraph("", estilo_th_top)]
-    header_linha_tipo = [Paragraph("<b>FAL</b>", estilo_th_top), Paragraph("<b>CON</b>", estilo_th_top)]
-    
-    col_widths = [larg_matr, larg_nome]
-    span_commands = [
-        ('SPAN', (0, 0), (0, 2)),
-        ('SPAN', (1, 0), (1, 2)),
-    ]
-
-    i = 2
-    col_idx_atual = 2
-    while i < len(colunas_originais):
-        col_name = colunas_originais[i]
-        if " - FAL" in col_name:
-            nome_uc = col_name.replace(" - FAL", "")
-            iduc_str = ""
-            if mapa_nomes_iduc:
-                for k, v in mapa_nomes_iduc.items():
-                    if v == nome_uc:
-                        iduc_str = k
-                        break
-            
-            header_linha_disc.extend([Paragraph(f"<b>{nome_uc}</b>", estilo_th), Paragraph("", estilo_th)])
-            header_linha_iduc.extend([Paragraph(f"<b>{iduc_str}</b>", estilo_th), Paragraph("", estilo_th)])
-            header_linha_tipo.extend([Paragraph("<b>F</b>", estilo_th), Paragraph("<b>C</b>", estilo_th)])
-            
-            span_commands.append(('SPAN', (col_idx_atual, 0), (col_idx_atual + 1, 0)))
-            span_commands.append(('SPAN', (col_idx_atual, 1), (col_idx_atual + 1, 1)))
-            
-            col_widths.extend([larg_col_uc, larg_col_uc])
-            col_idx_atual += 2
-            i += 2
-        else:
-            i += 1
-
-    dados_tabela = [header_linha_disc, header_linha_iduc, header_linha_tipo]
-
-    if df_matriz is not None:
-        for _, row in df_matriz.iterrows():
-            linha_dados = [
-                Paragraph(str(row.iloc[0]), estilo_td),
-                Paragraph(str(row.iloc[1]), estilo_td_nome)
-            ]
-            for col_idx in range(2, len(row)):
-                val = row.iloc[col_idx]
-                val_str = str(val) if pd.notnull(val) and str(val) != 'nan' else ""
-                linha_dados.append(Paragraph(val_str, estilo_td))
-            dados_tabela.append(linha_dados)
-
-    tabela_matriz = Table(dados_tabela, repeatRows=3, colWidths=col_widths)
-    
-    # Estilização com cinza claro elegante para as disciplinas e margens compactas
-    estilo_tabela_base = [
-        ('BACKGROUND', (0, 0), (1, 2), colors.HexColor("#E2E8F0")), # Cinza Azulado para Matrícula/Estudante
-        ('TEXTCOLOR', (0, 0), (1, 2), colors.HexColor("#1A202C")),
-        ('BACKGROUND', (2, 0), (-1, 1), colors.HexColor("#EDF2F7")), # Cinza claro limpo para disciplinas e IDs[cite: 7]
-        ('BACKGROUND', (2, 2), (-1, 2), colors.HexColor("#E2E8F0")), # Cinza para colunas F e C
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
-        ('TOPPADDING', (0, 0), (-1, -1), 1),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-        ('LEFTPADDING', (0, 0), (-1, -1), 1),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 1),
-        ('BACKGROUND', (0, 3), (1, -1), colors.HexColor("#FFFFFF")),
-        ('BACKGROUND', (2, 3), (-1, -1), colors.HexColor("#F8FAFC")),
-    ]
-    
-    tabela_matriz.setStyle(TableStyle(estilo_tabela_base + span_commands))
-    
-    story.append(tabela_matriz)
-    doc.build(story)
+    doc.build(story, onFirstPage=_rodape, onLaterPages=_rodape)
     buffer.seek(0)
     return buffer.getvalue()
