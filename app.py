@@ -1,11 +1,12 @@
 import streamlit as st
 from datetime import date
-from modulos.afin import renderizar_modulo_afin
 import pandas as pd
 
-# Importação dos nossos blocos modulares criados na pasta 'modulos'
+# Importação dos blocos modulares criados na pasta 'modulos'
 from modulos.conexao import executar_query
 from modulos.pdf_generator import gerar_pdf_historico_aluno
+from modulos.afin import renderizar_modulo_afin
+from modulos.relatorio_turma import renderizar_modulo_relatorio_turma
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Sistema Escolar DDC - Diário de Classe", layout="wide")
@@ -64,7 +65,8 @@ lista_menus = [
     "Gestão do Diário e Frequência (TB_DIÁRIO)",
     "🎓 Secretaria - Ficha e Documentos",
     "⚖️ Gestão de Base Legal",
-    "📊 AFIN (Acompanhamento de Frequência e Conceito)"
+    "📊 AFIN (Acompanhamento de Frequência e Conceito)",
+    "📊 Relatório da Turma"
 ]
 
 perfil_atual = st.session_state.get("perfil", "professor")
@@ -80,6 +82,10 @@ menu = st.sidebar.selectbox("Escolha uma opção:", lista_menus)
 # ==========================================
 if menu == "📊 AFIN (Acompanhamento de Frequência e Conceito)":
     renderizar_modulo_afin()
+
+elif menu == "📊 Relatório da Turma":
+    renderizar_modulo_relatorio_turma()
+
 elif menu == "⚙️ Gestão de Acessos e Senhas (Admin)":
     st.subheader("⚙️ Painel do Administrador - Gestão de Utilizadores e Senhas")
     st.markdown("Registe novos professores, atualize palavras-passe ou gira os acessos ao sistema.")
@@ -286,7 +292,7 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
                 st.success(f"Aula do dia {nova_data_aula} adicionada com sucesso ao diário!")
                 st.rerun()
             except Exception as e:
-                st.success(f"Data registada com sucesso na base de dados!")
+                st.success("Data registada com sucesso na base de dados!")
                 st.rerun()
                 
         st.markdown("---")
@@ -311,7 +317,7 @@ elif menu == "Gestão do Diário e Frequência (TB_DIÁRIO)":
                 try:
                     df_datas = executar_query(f"SELECT DISTINCT data FROM TB_DIARIO WHERE turma = '{turma_diario}'")
                     lista_datas = df_datas['data'].astype(str).tolist() if not df_datas.empty else [str(date.today())]
-                except:
+                except Exception:
                     lista_datas = [str(date.today())]
                     
                 df_matriz_freq = df_alunos[['matricula', 'turma']].copy()
