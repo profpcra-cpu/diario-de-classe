@@ -19,23 +19,23 @@ def renderizar_modulo_relatorio_turma():
     # Botão para consultar e carregar os dados
     if st.button("🔍 Gerar Relatório da Turma"):
         try:
-           # Consulta 1: Dados Cadastrais dos Alunos da Turma (usando SELECT * para evitar erro de coluna ausente)
-query_pessoas = """
-    SELECT * 
-    FROM TB_PESSOAS 
-    WHERE turma = %s
-    ORDER BY nome
-"""
-df_pessoas = executar_query(query_pessoas, params=(turma_selecionada,))
+            # Consulta 1: Dados Cadastrais dos Alunos da Turma
+            query_pessoas = """
+                SELECT * 
+                FROM TB_PESSOAS 
+                WHERE turma = %s
+                ORDER BY nome
+            """
+            df_pessoas = executar_query(query_pessoas, params=(turma_selecionada,))
 
-if df_pessoas.empty:
-    st.warning(f"Nenhum aluno encontrado na TB_PESSOAS para a turma '{turma_selecionada}'.")
-    st.session_state['relatorio_turma_dados'] = None
-else:
-    # Se a coluna 'situacao' não existir na tabela, cria uma coluna fictícia ou ignora no indicador
-    if 'situacao' not in df_pessoas.columns:
-        df_pessoas['situacao'] = 'N/A'
+            if df_pessoas.empty:
+                st.warning(f"Nenhum aluno encontrado na TB_PESSOAS para a turma '{turma_selecionada}'.")
+                st.session_state['relatorio_turma_dados'] = None
             else:
+                # Se a coluna 'situacao' não existir na tabela, cria uma coluna fictícia
+                if 'situacao' not in df_pessoas.columns:
+                    df_pessoas['situacao'] = 'N/A'
+
                 # Consulta 2: Diário completo da Turma
                 if semestre_filtro != "Todos" and semestre_filtro.strip() != "":
                     query_diario = """
@@ -97,7 +97,7 @@ else:
         m1.metric("Total de Alunos", len(df_pessoas))
         
         if 'situacao' in df_pessoas.columns:
-            ativos = len(df_pessoas[df_pessoas['situacao'].str.upper() == 'ATIVO']) if not df_pessoas.empty else 0
+            ativos = len(df_pessoas[df_pessoas['situacao'].astype(str).str.upper() == 'ATIVO']) if not df_pessoas.empty else 0
             m2.metric("Alunos Ativos", ativos)
         else:
             m2.metric("Alunos Ativos", "N/A")
@@ -126,7 +126,7 @@ else:
                 st.info("Nenhum lançamento de diário encontrado para gerar a matriz.")
 
         with tab_alunos:
-            st.markdown("#### Dados Cadastrais dos Estantes da Turma")
+            st.markdown("#### Dados Cadastrais dos Estudantes da Turma")
             st.dataframe(df_pessoas, use_container_width=True)
 
         with tab_resumo:
@@ -142,13 +142,16 @@ else:
         
         with col_exp1:
             # Botão de Download em Excel/CSV
-            csv_data = df_matriz.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📊 Descarregar Tabela (CSV)",
-                data=csv_data,
-                file_name=f"Relatorio_Turma_{turma_selecionada}.csv",
-                mime="text/csv"
-            )
+            if not df_matriz.empty:
+                csv_data = df_matriz.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📊 Descarregar Tabela (CSV)",
+                    data=csv_data,
+                    file_name=f"Relatorio_Turma_{turma_selecionada}.csv",
+                    mime="text/csv"
+                )
+            else:
+                st.write("")
 
         with col_exp2:
             # Botão de Download do PDF do Relatório da Turma
