@@ -402,7 +402,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         Paragraph("RESULTADO", estilo_th),
     ]
 
-    tabela_hist_dados = [header_hist]
+tabela_hist_dados = [header_hist]
 
     if df_historico is not None and not df_historico.empty:
         for _, row in df_historico.iterrows():
@@ -412,11 +412,23 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                     row.get("componente", row.get("disciplina", "---"))
                 )
             )
-            sem = str(row.get("semestre", ""))
-            ch = str(row.get("carga_horaria", row.get("ch", "")))
-            mod = str(row.get("modulo", ""))
-            faltas = str(row.get("faltas", "0"))
-            res = str(row.get("resultado", row.get("conceito", "")))
+            
+            # Verifica se o semestre foi lançado
+            sem = str(row.get("semestre", "")).strip()
+            
+            if not sem or sem.lower() in ("none", "nan", ""):
+                # Se não houver semestre, mantém os campos académicos limpos
+                sem = ""
+                ch = ""
+                mod = ""
+                faltas = ""
+                res = ""
+            else:
+                # Se houver semestre, preenche normalmente
+                ch = str(row.get("carga_horaria", row.get("ch", "")))
+                mod = str(row.get("modulo", ""))
+                faltas = str(row.get("faltas", "0"))
+                res = str(row.get("resultado", row.get("conceito", "")))
 
             tabela_hist_dados.append([
                 Paragraph(comp, estilo_td_left),
@@ -426,6 +438,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 Paragraph(faltas, estilo_td),
                 Paragraph(res, estilo_td),
             ])
+            res = str(row.get("resultado", row.get("conceito", "")))
+
+     
 
     t_hist = Table(
         tabela_hist_dados,
