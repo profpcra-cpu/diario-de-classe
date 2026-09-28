@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import date
 from modulos.afin import renderizar_modulo_afin
+import pandas as pd
 
 # Importação dos nossos blocos modulares criados na pasta 'modulos'
 from modulos.conexao import executar_query
@@ -62,6 +63,7 @@ lista_menus = [
     "Diário de Classe (Notas - TB_AVALIACOES)",
     "Gestão do Diário e Frequência (TB_DIÁRIO)",
     "🎓 Secretaria - Ficha e Documentos",
+    "⚖️ Gestão de Base Legal",
     "📊 AFIN (Acompanhamento de Frequência e Conceito)"
 ]
 
@@ -116,6 +118,82 @@ elif menu == "⚙️ Gestão de Acessos e Senhas (Admin)":
             st.dataframe(df_utilizadores, use_container_width=True)
         except Exception as e:
             st.error("A tabela TB_UTILIZADORES ainda não foi criada na base de dados.")
+
+elif menu == "⚖️ Gestão de Base Legal":
+    st.subheader("⚖️ Central de Gestão - Base Legal e Competências por Turma")
+    st.markdown("Consulte, edite ou acrescente novas diretrizes legais e matrizes curriculares aplicadas por turma e sigla.")
+    
+    aba_bl_consulta, aba_bl_novo = st.tabs(["🔍 Consultar e Editar Existentes", "➕ Acrescentar Nova Base Legal"])
+    
+    with aba_bl_consulta:
+        try:
+            df_base_legal = executar_query("SELECT * FROM TB_BASE_LEGAL")
+            if df_base_legal.empty:
+                st.info("A tabela TB_BASE_LEGAL está vazia. Utilize a aba ao lado para acrescentar registos ou execute o script de migração a partir da TB_PESSOAS.")
+            else:
+                pesquisa_bl = st.text_input("Filtrar por Sigla ou Turma:", key="filtro_bl")
+                df_filtrado = df_base_legal
+                if pesquisa_bl:
+                    df_filtrado = df_base_legal[
+                        df_base_legal['sigla'].str.contains(pesquisa_bl, case=False, na=False) | 
+                        df_base_legal['turma'].str.contains(pesquisa_bl, case=False, na=False)
+                    ]
+                
+                df_bl_editado = st.data_editor(df_filtrado, use_container_width=True, key="editor_base_legal")
+                
+                if st.button("💾 Guardar Alterações da Base Legal"):
+                    with st.spinner("A atualizar base de dados..."):
+                        atualizados_bl = 0
+                        for _, row in df_bl_editado.iterrows():
+                            reg_id = row.get('id')
+                            sigla_val = row.get('sigla')
+                            turma_val = row.get('turma')
+                            base_val = row.get('base_legal')
+                            comp_val = row.get('competencias_habilidades')
+                            
+                            if reg_id:
+                                sql_upd_bl = """
+                                    UPDATE TB_BASE_LEGAL 
+                                    SET sigla = %s, turma = %s, base_legal = %s, competencias_habilidades = %s 
+                                    WHERE id = %s
+                                """
+                                executar_query(sql_upd_bl, params=(sigla_val, turma_val, base_val, comp_val, reg_id), fetch=False)
+                                atualizados_bl += 1
+                        st.success(f"Sucesso! {atualizados_bl} registos atualizados em TB_BASE_LEGAL.")
+                        st.rerun()
+        except Exception as e:
+            st.error(f"Erro ao aceder à tabela TB_BASE_LEGAL. Verifique se a tabela foi criada no MySQL: {e}")
+            
+    with aba_bl_novo:
+        st.markdown("### Registar Nova Base Legal e Competências para Turma/Sigla")
+        with st.form("form_nova_base_legal"):
+            col_nb1, col_nb2 = st.columns(2)
+            with col_nb1:
+                nova_sigla = st.text_input("Sigla (ex: TEN):")
+            with col_nb2:
+                nova_turma = st.text_input("Turma (ex: 26201A):")
+                
+            nova_base_legal_txt = st.text_area("Base Legal:")
+            novas_competencias_txt = st.text_area("Competências / Habilidades:")
+            
+            submit_novo_bl = st.form_submit_button("➕ Inserir Novo Registo")
+            
+            if submit_novo_bl:
+                if nova_sigla and nova_turma:
+                    try:
+                        sql_ins_bl = """
+                            INSERT INTO TB_BASE_LEGAL (sigla, turma, base_legal, competencias_habilidades) 
+                            VALUES (%s, %s, %s, %s)
+                            ON DUPLICATE KEY UPDATE 
+                                base_legal = VALUES(base_legal), 
+                                competencias_habilidades = VALUES(competencias_habilidades)
+                        """
+                        executar_query(sql_ins_bl, params=(nova_sigla, nova_turma, nova_base_legal_txt, novas_competencias_txt), fetch=False)
+                        st.success(f"Base legal para a turma {nova_turma} (Sigla: {nova_sigla}) inserida/atualizada com sucesso!")
+                    except Exception as e:
+                        st.error(f"Erro ao inserir dados na base de dados: {e}")
+                else:
+                    st.warning("Os campos 'Sigla' e 'Turma' são obrigatórios.")
 
 elif menu == "Consultar Pessoas":
     st.subheader("Registo de Alunos / Pessoas (Consulta)")
@@ -274,14 +352,12 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                     with aba_ficha:
                         st.markdown("### Informações Pessoais e Cadastrais do Estudante")
                         
-                        # Extrai todos os dados do aluno num dicionário
                         aluno_info = df_dados_pessoais.iloc[0].to_dict()
                         
                         with st.form(key=f"form_ficha_{matricula_busca}"):
                             col_f1, col_f2 = st.columns(2)
                             campos_atualizados = {}
                             
-                            # Filtra para excluir a chave primária da edição direta, gerando inputs para todas as colunas existentes
                             chaves = [k for k in aluno_info.keys() if k.lower() != 'matricula']
                             
                             for i, col_name in enumerate(chaves):
@@ -300,7 +376,6 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                             
                             if submit_cadastral:
                                 try:
-                                    # Montagem dinâmica da instrução UPDATE com base em todas as colunas da tabela
                                     set_clauses = ", ".join([f"{k} = %s" for k in campos_atualizados.keys()])
                                     sql_upd_cad = f"UPDATE TB_PESSOAS SET {set_clauses} WHERE matricula = %s"
                                     
@@ -320,7 +395,6 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                             st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
                             df_historico_editado = pd.DataFrame()
                         else:
-                            # Editor interativo para o histórico/notas do aluno
                             df_historico_editado = st.data_editor(df_historico_aluno, use_container_width=True, key=f"historico_editor_{matricula_busca}")
                             
                             if st.button("💾 Guardar Alterações do Histórico"):
@@ -364,7 +438,6 @@ elif menu == "🎓 Secretaria - Ficha e Documentos":
                                 st.info("Módulo de Declaração de Matrícula em desenvolvimento...")
                         with col_doc2:
                             dados_dict = df_dados_pessoais.iloc[0].to_dict()
-                            # Utiliza o dataframe editado (ou o original caso esteja vazio) para gerar o PDF atualizado
                             df_para_pdf = df_historico_editado if not df_historico_editado.empty else df_historico_aluno
                             pdf_bytes = gerar_pdf_historico_aluno(df_para_pdf, dados_dict)
                             
