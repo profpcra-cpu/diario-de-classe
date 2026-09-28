@@ -8,13 +8,13 @@ from reportlab.lib import colors
 from modulos.conexao import executar_query
 
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """Gera o PDF do Histórico Escolar compacto, em página única, sem cabeçalhos coloridos e sem repetições."""
+    """Gera o PDF do Histórico Escolar ultracompacto em página única, com primeira coluna alargada."""
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
         df_historico, dados_aluno = dados_aluno, df_historico
 
-    # Margens bem reduzidas para garantir página única
+    # Margens estreitas para aproveitar ao máximo a página única
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=15, bottomMargin=15)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=20, leftMargin=20, topMargin=12, bottomMargin=12)
     story = []
     
     styles = getSampleStyleSheet()
@@ -22,7 +22,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_cab_gov = ParagraphStyle(
         'CabGov',
         parent=styles['Normal'],
-        fontSize=7,
+        fontSize=6.5,
         alignment=1,
         textColor=colors.HexColor("#1A202C"),
         fontName='Helvetica-Bold',
@@ -32,17 +32,17 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_titulo_he = ParagraphStyle(
         'TituloHE',
         parent=styles['Heading1'],
-        fontSize=9,
+        fontSize=8.5,
         alignment=1,
         textColor=colors.HexColor("#000000"),
         fontName='Helvetica-Bold',
-        spaceAfter=2
+        spaceAfter=1
     )
     
     estilo_label = ParagraphStyle(
         'LabelHE',
         parent=styles['Normal'],
-        fontSize=6,
+        fontSize=5.5,
         textColor=colors.HexColor("#2D3748"),
         fontName='Helvetica-Bold'
     )
@@ -50,7 +50,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_val = ParagraphStyle(
         'ValHE',
         parent=styles['Normal'],
-        fontSize=6.5,
+        fontSize=6,
         textColor=colors.HexColor("#1A202C"),
         fontName='Helvetica'
     )
@@ -58,7 +58,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_th = ParagraphStyle(
         'THHE',
         parent=styles['Normal'],
-        fontSize=6.5,
+        fontSize=6,
         alignment=1,
         textColor=colors.HexColor("#000000"),
         fontName='Helvetica-Bold'
@@ -67,7 +67,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_td = ParagraphStyle(
         'TDHE',
         parent=styles['Normal'],
-        fontSize=6.5,
+        fontSize=6,
         alignment=1,
         textColor=colors.HexColor("#2D3748"),
         fontName='Helvetica'
@@ -76,7 +76,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_td_left = ParagraphStyle(
         'TDHELeft',
         parent=styles['Normal'],
-        fontSize=6.5,
+        fontSize=6,
         alignment=0,
         textColor=colors.HexColor("#2D3748"),
         fontName='Helvetica'
@@ -85,8 +85,8 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     path_logo_gdf = "logo_gdf.png"
     path_logo_escola = "logo_escola.png"
     
-    img_gdf = Image(path_logo_gdf, width=35, height=35) if os.path.exists(path_logo_gdf) else Paragraph("", estilo_val)
-    img_escola = Image(path_logo_escola, width=35, height=35) if os.path.exists(path_logo_escola) else Paragraph("", estilo_val)
+    img_gdf = Image(path_logo_gdf, width=32, height=32) if os.path.exists(path_logo_gdf) else Paragraph("", estilo_val)
+    img_escola = Image(path_logo_escola, width=32, height=32) if os.path.exists(path_logo_escola) else Paragraph("", estilo_val)
 
     texto_institucional = [
         Paragraph("Governo do Distrito Federal", estilo_cab_gov),
@@ -98,20 +98,19 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     tabela_cabecalho_topo = Table([
         [img_gdf, texto_institucional, img_escola]
-    ], colWidths=[50, 472, 50])
+    ], colWidths=[45, 482, 45])
     
-    # Sem cores de fundo no cabeçalho topo (apenas linhas limpas)
     tabela_cabecalho_topo.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
 
     story.append(tabela_cabecalho_topo)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
     story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo_he))
     
     if isinstance(dados_aluno, dict):
@@ -138,7 +137,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     orgao = str(d.get('orgao_expeditor', ''))
     dt_exp = str(d.get('data_expedicao', ''))
 
-    # Busca dinâmica da Base Legal na tabela TB_BASE_LEGAL
+    # Busca dinâmica da Base Legal
     base_legal_texto = "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 02/2023 - CEDF"
     if sigla and turma:
         try:
@@ -159,7 +158,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         [Paragraph("<b>Base Legal:</b>", estilo_label), Paragraph(f"<b>{base_legal_texto}</b>", estilo_label), Paragraph("", estilo_label), Paragraph("", estilo_label)]
     ]
     
-    t_cad = Table(dados_cadastrais, colWidths=[110, 120, 202, 140])
+    t_cad = Table(dados_cadastrais, colWidths=[105, 115, 202, 150])
     t_cad.setStyle(TableStyle([
         ('SPAN', (1, 0), (3, 0)),
         ('SPAN', (1, 3), (3, 3)),
@@ -168,12 +167,12 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
     
     story.append(t_cad)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
 
     header_hist = [
         Paragraph("<b>Componente Curricular</b>", estilo_th),
@@ -204,19 +203,19 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 Paragraph(res, estilo_td)
             ])
             
-    # repeatRows=0 para evitar repetição de cabeçalho
-    t_hist = Table(tabela_hist_dados, repeatRows=0, colWidths=[252, 70, 45, 75, 45, 85])
+    # Primeira coluna alargada para 290, totalizando 572 de largura útil
+    t_hist = Table(tabela_hist_dados, repeatRows=0, colWidths=[290, 60, 38, 70, 38, 76])
     t_hist.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#FFFFFF")), # Sem cor de fundo no cabeçalho da tabela
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#FFFFFF")),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#FFFFFF")),
     ]))
     
     story.append(t_hist)
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
 
     rodape_dados = [
         [Paragraph("<b>AP = Apto; AE = Aprov. de Estudos; NA = Não Apto; TR = Tranc. de Curso; D = Desistente</b>", estilo_label),  
@@ -231,11 +230,11 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ('SPAN', (0, 1), (2, 1)),
         ('SPAN', (0, 2), (2, 2)),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FFFFFF")), # Fundo totalmente branco, sem coloração
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 2), (-1, 2), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 1.5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
     ]))
     
     story.append(t_rod)
@@ -243,7 +242,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     """Gera o PDF consolidado da Matriz AFIN em formato paisagem com a nova paleta de cores e colunas compactas."""
     buffer = io.BytesIO()
