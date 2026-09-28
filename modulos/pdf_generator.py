@@ -16,7 +16,7 @@ from modulos.conexao import executar_query
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
     Gera o Histórico Escolar em A4, com diagramação institucional,
-    alinhamento rigoroso de colunas e remoção da barra de seção do histórico.
+    alinhamento rigoroso de colunas e primeira coluna ampliada.
     """
 
     # Compatibilidade com chamada invertida
@@ -388,8 +388,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # HISTÓRICO ACADÊMICO (Linha de seção "HISTÓRICO ACADÊMICO" removida)
-    # As larguras de colunas abaixo somam exatamente 554 pt para manter o alinhamento perfeito.
+    # HISTÓRICO ACADÊMICO
+    # Primeira coluna ampliada para 314 pt; demais colunas reduzidas proporcionalmente.
+    # Total somando exatamente 554 pt.
     # ------------------------------------------------------------------
     header_hist = [
         Paragraph("COMPONENTE CURRICULAR", estilo_th),
@@ -425,11 +426,10 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 Paragraph(res, estilo_td),
             ])
 
-    # Larguras recalculadas para somar exatamente 554 pt alinhando com a margem global
     t_hist = Table(
         tabela_hist_dados,
         repeatRows=1,
-        colWidths=[274, 50, 35, 75, 55, 65],
+        colWidths=[314, 40, 30, 65, 45, 60],
         hAlign="LEFT"
     )
 
@@ -456,7 +456,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # RESUMO / LEGENDA (Ajustado para a mesma largura total de 554 pt)
+    # RESUMO / LEGENDA
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
