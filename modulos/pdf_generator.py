@@ -16,7 +16,8 @@ from modulos.conexao import executar_query
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
     Gera o Histórico Escolar em A4, com diagramação institucional,
-    alinhamento rigoroso de colunas (todas somando exatamente 554 pt).
+    alinhamento rigoroso de colunas (todas somando exatamente 554 pt)
+    e limpeza de campos acadêmicos quando o semestre não estiver lançado.
     """
 
     # Compatibilidade com chamada invertida
@@ -394,7 +395,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     # HISTÓRICO ACADÊMICO (Soma exata: 314 + 40 + 30 + 65 + 45 + 60 = 554 pt)
     # ------------------------------------------------------------------
     header_hist = [
-        Paragraph("UNIDADE CURRICULAR", estilo_th),
+        Paragraph("COMPONENTE CURRICULAR", estilo_th),
         Paragraph("SEM.", estilo_th),
         Paragraph("CH", estilo_th),
         Paragraph("MÓDULO", estilo_th),
@@ -402,7 +403,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         Paragraph("RESULTADO", estilo_th),
     ]
 
-tabela_hist_dados = [header_hist]
+    tabela_hist_dados = [header_hist]
 
     if df_historico is not None and not df_historico.empty:
         for _, row in df_historico.iterrows():
@@ -413,18 +414,17 @@ tabela_hist_dados = [header_hist]
                 )
             )
             
-            # Verifica se o semestre foi lançado
+            # Verifica se o semestre foi lançado (Lógica aplicada)
             sem = str(row.get("semestre", "")).strip()
             
             if not sem or sem.lower() in ("none", "nan", ""):
-                # Se não houver semestre, mantém os campos académicos limpos
+                # Mantém os campos acadêmicos limpos se não houver semestre
                 sem = ""
                 ch = ""
                 mod = ""
                 faltas = ""
                 res = ""
             else:
-                # Se houver semestre, preenche normalmente
                 ch = str(row.get("carga_horaria", row.get("ch", "")))
                 mod = str(row.get("modulo", ""))
                 faltas = str(row.get("faltas", "0"))
@@ -438,9 +438,6 @@ tabela_hist_dados = [header_hist]
                 Paragraph(faltas, estilo_td),
                 Paragraph(res, estilo_td),
             ])
-            res = str(row.get("resultado", row.get("conceito", "")))
-
-     
 
     t_hist = Table(
         tabela_hist_dados,
