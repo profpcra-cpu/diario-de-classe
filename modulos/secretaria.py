@@ -8,6 +8,8 @@ from modulos.pdf_generator import (
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
     gerar_pdf_passes_turma_unificado,
+    gerar_pdf_renovacao_matricula,              # <--- Certifique-se de importar esta função
+    gerar_pdf_renovacao_turma_unificado,        # <--- Função para lote da turma (ou equivalente)
 )
 
 
@@ -161,13 +163,14 @@ def renderizar_modulo_secretaria():
                                 st.error(f"Erro ao guardar histórico: {e}")
 
                     st.markdown("---")
-                    st.markdown("### 📝 Editor Personalizado de Documentos (Pré-Impressão)")
-                    st.info("Selecione o tipo de documento abaixo. Os campos do formulário ajustam-se automaticamente para permitir edições pontuais antes da impressão.")
+                    st.markdown("### 📝 Editor Personalizado e Emissão de Documentos")
+                    st.info("Selecione o documento oficial abaixo. O cabeçalho e dados virão pré-preenchidos automaticamente.")
 
-                    # Seleção do documento que deseja ajustar e emitir
+                    # Seleção do documento (incluindo Renovação de Matrícula)
                     tipo_documento = st.selectbox(
                         "Selecione o Documento a Emitir:",
                         [
+                            "Renovação de Matrícula",
                             "Passe Estudantil",
                             "Declaração de Escolaridade", 
                             "Declaração de Conclusão", 
@@ -177,7 +180,7 @@ def renderizar_modulo_secretaria():
 
                     dados_originais = df_dados_pessoais.iloc[0].to_dict()
 
-                    # Formulário Dinâmico de Edição Pré-Impressão
+                    # Formulário de Edição Pré-Impressão
                     with st.form(key=f"form_edicao_doc_{matricula_busca}"):
                         st.markdown(f"**A ajustar parâmetros para:** `{tipo_documento}`")
                         
@@ -194,47 +197,42 @@ def renderizar_modulo_secretaria():
                             edit_sexo = st.text_input("Sexo:", value=str(dados_originais.get("sexo", "")))
                             edit_data_emissao = st.text_input("Data do Documento:", value="29/09/2026")
 
-                        # Campos específicos caso o documento selecionado seja o Passe Estudantil (com Endereço e Observações de Turno)
-                        if tipo_documento == "Passe Estudantil":
+                        # Campos dinâmicos dependendo do tipo de documento
+                        if tipo_documento == "Renovação de Matrícula":
                             st.markdown("---")
-                            st.markdown("📍 **Campos Específicos de Endereço e Observações (Passe Estudantil):**")
-                            
-                            col_end1, col_end2, col_end3 = st.columns(3)
-                            with col_end1:
-                                edit_endereco = st.text_input("Endereço (Rua/Quadra):", value=str(dados_originais.get("endereco", "QUADRA 1, CONJUNTO I 1, CASA 16")))
-                            with col_end2:
-                                edit_bairro = st.text_input("Bairro:", value=str(dados_originais.get("bairro", "SRO")))
-                            with col_end3:
-                                edit_cep = st.text_input("CEP:", value=str(dados_originais.get("cep", "73343013")))
+                            st.markdown("📋 **Campos Específicos (Renovação de Matrícula):**")
+                            col_rm1, col_rm2, col_rm3 = st.columns(3)
+                            with col_rm1:
+                                edit_mae = st.text_input("Nome da Mãe:", value=str(dados_originais.get("nome_mae", "")))
+                            with col_rm2:
+                                edit_pai = st.text_input("Nome do Pai:", value=str(dados_originais.get("nome_pai", "")))
+                            with col_rm3:
+                                edit_nacionalidade = st.text_input("Nacionalidade:", value=str(dados_originais.get("nacionalidade", "BRASILEIRA")))
 
-                            edit_observacao_passe = st.text_area(
-                                "Texto / Observações do Passe (Turnos e Períodos Letivos):",
+                            col_rm4, col_rm5 = st.columns(2)
+                            with col_rm4:
+                                edit_naturalidade = st.text_input("Naturalidade:", value=str(dados_originais.get("naturalidade", "PLANALTINA")))
+                            with col_rm5:
+                                edit_uf_nat = st.text_input("UF Naturalidade:", value=str(dados_originais.get("uf", "DF")))
+
+                            edit_observacao_doc = st.text_area(
+                                "Observações / Instruções da Ficha de Renovação:",
                                 value=(
-                                    "Turno Matutino: Aulas de 8h00min às 12h00min, de segunda-feira a sexta-feira.\n"
-                                    "Turno Vespertino: Aulas de 13h30min às 17h30min, de segunda-feira a sexta-feira.\n"
-                                    "Turno Noturno: Aulas de 19h00min às 23h00min, de segunda-feira a sexta-feira.\n"
-                                    "Declaração válida somente sem emendas e sem rasuras por 30 dias.\n"
-                                    "Início do 1º Semestre Letivo: 12/02/2026 – Término: 10/07/2026.\n"
-                                    "Início do 2º Semestre Letivo: 28/07/2026 – Término: 22/12/2026.\n"
-                                    "Observação: O(a) aluno(a) está regularmente matriculado(a) nesta Instituição de Ensino."
+                                    "1. Deseja renovar a matrícula para o 2º semestre de 2026? [ X ] Sim [  ] Não\n"
+                                    "2. Está cursando o Ensino Médio atualmente? [ X ] Sim [  ] Não\n"
+                                    "A renovação de matrícula não é automática, portanto, o estudante que não efetiva-la perderá o direito à vaga."
                                 ),
-                                height=150
+                                height=100
                             )
+                        elif tipo_documento == "Passe Estudantil":
+                            edit_observacao_doc = "Declaração válida por 30 dias para efeitos de Passe Estudantil."
                         else:
-                            # Campos genéricos para outros tipos de declaração
-                            edit_endereco = str(dados_originais.get("endereco", ""))
-                            edit_bairro = str(dados_originais.get("bairro", ""))
-                            edit_cep = str(dados_originais.get("cep", ""))
-                            edit_observacao_passe = st.text_area(
-                                "Texto / Observações / Carga Horária Específica:",
-                                value=f"O(a) aluno(a) acima supracitado(a) concluiu o referido curso, sendo a carga horária total de horas."
-                            )
+                            edit_observacao_doc = "Documento emitido conforme registos da instituição."
 
                         botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
 
-                    # Ação executada após submeter o formulário de edição
+                    # Ação ao submeter
                     if botao_gerar_editado:
-                        # Consolidar dados customizados
                         dados_customizados = dados_originais.copy()
                         dados_customizados["nome"] = edit_nome
                         dados_customizados["curso"] = edit_curso
@@ -244,19 +242,18 @@ def renderizar_modulo_secretaria():
                         dados_customizados["data_nascimento"] = edit_nasc
                         dados_customizados["sexo"] = edit_sexo
                         dados_customizados["data_emissao"] = edit_data_emissao
-                        dados_customizados["endereco"] = edit_endereco
-                        dados_customizados["bairro"] = edit_bairro
-                        dados_customizados["cep"] = edit_cep
-                        dados_customizados["observacao"] = edit_observacao_passe
+                        dados_customizados["observacao"] = edit_observacao_doc
 
-                        df_para_pdf = (
-                            df_historico_editado
-                            if not df_historico_editado.empty
-                            else df_historico_aluno
-                        )
+                        if tipo_documento == "Renovação de Matrícula":
+                            dados_customizados["nome_mae"] = edit_mae
+                            dados_customizados["nome_pai"] = edit_pai
+                            dados_customizados["nacionalidade"] = edit_nacionalidade
+                            dados_customizados["naturalidade"] = edit_naturalidade
+                            dados_customizados["uf"] = edit_uf_nat
+                            pdf_bytes_gerado = gerar_pdf_renovacao_matricula(dados_customizados)
+                            nome_ficheiro = f"renovacao_matricula_{matricula_busca}.pdf"
 
-                        # Direciona para a função de PDF correta
-                        if tipo_documento == "Passe Estudantil":
+                        elif tipo_documento == "Passe Estudantil":
                             pdf_bytes_gerado = gerar_pdf_passe_estudantil(dados_customizados)
                             nome_ficheiro = f"passe_estudantil_{matricula_busca}.pdf"
 
@@ -268,12 +265,12 @@ def renderizar_modulo_secretaria():
                             pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
                             nome_ficheiro = f"declaracao_conclusao_{matricula_busca}.pdf"
 
-                        else:  # Histórico Escolar Oficial
+                        else:
+                            df_para_pdf = df_historico_editado if not df_historico_editado.empty else df_historico_aluno
                             pdf_bytes_gerado = gerar_pdf_historico_aluno(df_para_pdf, dados_customizados)
                             nome_ficheiro = f"historico_oficial_{matricula_busca}.pdf"
 
-                        st.success(f"Documento '{tipo_documento}' gerado com sucesso com base nas edições efetuadas!")
-                        
+                        st.success(f"Documento '{tipo_documento}' gerado com sucesso!")
                         st.download_button(
                             label=f"📥 Descarregar {tipo_documento} (PDF)",
                             data=pdf_bytes_gerado,
@@ -286,34 +283,43 @@ def renderizar_modulo_secretaria():
                     # EMISSÃO UNIFICADA EM LOTE (POR TURMA)
                     # ---------------------------------------------------------
                     st.markdown("---")
-                    st.markdown("### 📚 Emissão Unificada em Lote (Passes de Toda a Turma)")
+                    st.markdown("### 📚 Emissão Unificada em Lote (Turma Inteira)")
                     
                     turma_atual = dados_originais.get("turma")
                     if turma_atual:
-                        st.info(f"Turma detetada para emissão unificada: **{turma_atual}**")
+                        st.info(f"Turma detetada para emissão em lote: **{turma_atual}**")
                         
-                        if st.button("🚀 Gerar PDF Único com Passes de Toda a Turma", use_container_width=True):
-                            with st.spinner("A consolidar os documentos de todos os alunos num único PDF..."):
-                                df_turma = executar_query(
-                                    "SELECT * FROM TB_PESSOAS WHERE turma = %s",
-                                    params=(turma_atual,)
-                                )
-                                
-                                if df_turma is not None and not df_turma.empty:
-                                    pdf_unificado_bytes = gerar_pdf_passes_turma_unificado(df_turma)
-                                    st.success(f"PDF unificado gerado com sucesso! {len(df_turma)} alunos incluídos.")
-                                    
-                                    st.download_button(
-                                        label=f"📥 Descarregar PDF Único da Turma {turma_atual}",
-                                        data=pdf_unificado_bytes,
-                                        file_name=f"passes_unificados_turma_{str(turma_atual).replace('/', '-')}.pdf",
-                                        mime="application/pdf",
-                                        use_container_width=True,
-                                    )
-                                else:
-                                    st.warning("Não foram encontrados outros alunos para esta turma.")
+                        col_lote1, col_lote2 = st.columns(2)
+                        with col_lote1:
+                            if st.button("🚀 Gerar Passes de Toda a Turma (PDF Único)", use_container_width=True):
+                                with st.spinner("A consolidar passes da turma..."):
+                                    df_turma = executar_query("SELECT * FROM TB_PESSOAS WHERE turma = %s", params=(turma_atual,))
+                                    if df_turma is not None and not df_turma.empty:
+                                        pdf_unificado_bytes = gerar_pdf_passes_turma_unificado(df_turma)
+                                        st.success("PDF de passes unificado com sucesso!")
+                                        st.download_button(
+                                            label="📥 Descarregar Passes Unificados da Turma",
+                                            data=pdf_unificado_bytes,
+                                            file_name=f"passes_turma_{str(turma_atual).replace('/', '-')}.pdf",
+                                            mime="application/pdf",
+                                            use_container_width=True,
+                                        )
+                        with col_lote2:
+                            if st.button("🚀 Gerar Fichas de Renovação da Turma (PDF Único)", use_container_width=True):
+                                with st.spinner("A consolidar fichas de renovação da turma..."):
+                                    df_turma = executar_query("SELECT * FROM TB_PESSOAS WHERE turma = %s", params=(turma_atual,))
+                                    if df_turma is not None and not df_turma.empty:
+                                        pdf_renovacao_unificado = gerar_pdf_renovacao_turma_unificado(df_turma)
+                                        st.success("PDF de renovações unificado com sucesso!")
+                                        st.download_button(
+                                            label="📥 Descarregar Renovações Unificadas da Turma",
+                                            data=pdf_renovacao_unificado,
+                                            file_name=f"renovacoes_turma_{str(turma_atual).replace('/', '-')}.pdf",
+                                            mime="application/pdf",
+                                            use_container_width=True,
+                                        )
                     else:
-                        st.warning("O aluno selecionado não possui uma turma associada no cadastro.")
+                        st.warning("O aluno selecionado não possui turma associada.")
 
     except Exception as e:
         st.error(f"Erro ao executar o motor da secretaria: {e}")
