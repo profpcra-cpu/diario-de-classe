@@ -1,3 +1,5 @@
+import io
+import zipfile
 import pandas as pd
 import streamlit as st
 
@@ -5,8 +7,25 @@ from modulos.conexao import executar_query
 from modulos.pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
-    gerar_pdf_passe_estudantil,  # <--- Importado a nova função do passe estudantil
+    gerar_pdf_passe_estudantil,
 )
+
+
+def gerar_zip_passes_turma(df_turma_alunos):
+    """Gera um arquivo ZIP em memória contendo o PDF de passe estudantil de cada aluno da turma."""
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for _, aluno in df_turma_alunos.iterrows():
+            dados_dict = aluno.to_dict()
+            matricula = str(dados_dict.get("matricula", "desconhecido"))
+            nome = str(dados_dict.get("nome", "aluno")).replace("/", "-")
+            
+            pdf_bytes = gerar_pdf_passe_estudantil(dados_dict)
+            nome_arquivo = f"passe_{matricula}_{nome}.pdf"
+            zip_file.writestr(nome_arquivo, pdf_bytes)
+            
+    zip_buffer.seek(0)
+    return zip_buffer.getvalue()
 
 
 def renderizar_modulo_secretaria():
@@ -182,11 +201,10 @@ def renderizar_modulo_secretaria():
                         else df_historico_aluno
                     )
 
-                    # Organizado em 3 colunas para acomodar os botões de emissão
+                    # Emissão Individual
                     col_doc1, col_doc2, col_doc3 = st.columns(3)
 
                     with col_doc1:
-                        # Emissão de Declaração de Escolaridade
                         pdf_dec_bytes = gerar_pdf_declaracao_escolaridade(
                             dados_dict
                         )
@@ -199,7 +217,6 @@ def renderizar_modulo_secretaria():
                         )
 
                     with col_doc2:
-                        # Emissão de Passe Estudantil
                         pdf_passe_bytes = gerar_pdf_passe_estudantil(
                             dados_dict
                         )
@@ -212,7 +229,6 @@ def renderizar_modulo_secretaria():
                         )
 
                     with col_doc3:
-                        # Emissão de Histórico Escolar
                         pdf_hist_bytes = gerar_pdf_historico_aluno(
                             df_para_pdf, dados_dict
                         )
@@ -223,6 +239,40 @@ def renderizar_modulo_secretaria():
                             mime="application/pdf",
                             use_container_width=True,
                         )
+
+                    # ---------------------------------------------------------
+                    # EMISSÃO EM LOTE POR TURMA (PASSE ESTUDANTIL)
+                    # ---------------------------------------------------------
+                    st.markdown("---")
+                    st.markdown("### 📦 Emissão em Lote (Passe Estudantil por Turma)")
+                    
+                    turma_atual = dados_dict.get("turma")
+                    if turma_atual:
+                        st.info(f"Turma detetada para emissão em lote: **{turma_atual}**")
+                        
+                        if st.button("🚀 Gerar Pacote ZIP com Passes de Toda a Turma", use_container_width=True):
+                            with st.spinner("A gerar documentos para todos os alunos da turma... Por favor, aguarde."):
+                                # Busca todos os registos da turma na base de dados
+                                df_turma = executar_query(
+                                    "SELECT * FROM TB_PESSOAS WHERE turma = %s",
+                                    params=(turma_atual,)
+                                )
+                                
+                                if df_turma is not None and not df_turma.empty:
+                                    zip_bytes = gerar_zip_passes_turma(df_turma)
+                                    st.success(f"Lote gerado com sucesso! {len(df_turma)} alunos incluídos.")
+                                    
+                                    st.download_button(
+                                        label=f"📥 Clique aqui para descarregar o ZIP da Turma {turma_atual}",
+                                        data=zip_bytes,
+                                        file_name=f"passes_turma_{str(turma_atual).replace('/', '-')}.zip",
+                                        mime="application/zip",
+                                        use_container_width=True,
+                                    )
+                                else:
+                                    st.warning("Não foram encontrados outros alunos para esta turma.")
+                    else:
+                        st.warning("O aluno selecionado não possui uma turma associada no cadastro.")
 
     except Exception as e:
         st.error(f"Erro ao executar o motor da secretaria: {e}")
