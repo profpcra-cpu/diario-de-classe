@@ -1,9 +1,16 @@
+import sys
+import os
 import io
 import pandas as pd
 import streamlit as st
 
-from .conexao import executar_query
-from .pdf_generator import (
+# Garante que a pasta 'modulos' está no caminho do Python para importações diretas
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+from conexao import executar_query
+from pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
