@@ -5,6 +5,7 @@ from modulos.conexao import executar_query
 from modulos.pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
+    gerar_pdf_passe_estudantil,  # <--- Importado a nova função do passe estudantil
 )
 
 
@@ -181,10 +182,11 @@ def renderizar_modulo_secretaria():
                         else df_historico_aluno
                     )
 
-                    col_doc1, col_doc2 = st.columns(2)
+                    # Organizado em 3 colunas para acomodar os botões de emissão
+                    col_doc1, col_doc2, col_doc3 = st.columns(3)
 
                     with col_doc1:
-                        # Emissão de Declaração de Escolaridade / Matrícula
+                        # Emissão de Declaração de Escolaridade
                         pdf_dec_bytes = gerar_pdf_declaracao_escolaridade(
                             dados_dict
                         )
@@ -197,6 +199,19 @@ def renderizar_modulo_secretaria():
                         )
 
                     with col_doc2:
+                        # Emissão de Passe Estudantil
+                        pdf_passe_bytes = gerar_pdf_passe_estudantil(
+                            dados_dict
+                        )
+                        st.download_button(
+                            label="🚌 Descarregar Passe Estudantil (PDF)",
+                            data=pdf_passe_bytes,
+                            file_name=f"passe_estudantil_{matricula_busca}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True,
+                        )
+
+                    with col_doc3:
                         # Emissão de Histórico Escolar
                         pdf_hist_bytes = gerar_pdf_historico_aluno(
                             df_para_pdf, dados_dict
