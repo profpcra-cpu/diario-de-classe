@@ -9,12 +9,50 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Estilização CSS Customizada (Modern Clean UI)
+# 2. Estilização CSS Customizada (Modern Clean UI & Logo Balancing)
 st.markdown("""
     <style>
     /* Estilo do container principal */
     .main {
         background-color: #f8f9fa;
+    }
+    
+    /* Contêiner de Logos Institucionais na Sidebar (Harmonização Visual) */
+    .brand-container {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-evenly;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        margin-bottom: 15px;
+    }
+    
+    .brand-logo {
+        max-height: 65px;
+        width: auto;
+        object-fit: contain;
+    }
+    
+    /* Contêiner de Logos do Cabeçalho Superior */
+    .header-brand-container {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+    
+    .header-logo {
+        max-height: 60px;
+        width: auto;
+        object-fit: contain;
     }
     
     /* Estilo dos Cards do Dashboard */
@@ -30,7 +68,7 @@ st.markdown("""
     .metric-card h4 {
         margin: 0;
         color: #555555;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
@@ -45,13 +83,6 @@ st.markdown("""
     [data-testid="stSidebar"] {
         background-color: #ffffff;
         border-right: 1px solid #e0e0e0;
-    }
-    
-    /* Botão de Terminar Sessão */
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        font-weight: 500;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -71,18 +102,30 @@ if not verificar_sessao():
     renderizar_login()
     st.stop()
 
+# Helper para ler imagem e converter em Base64 para exibição no HTML
+import base64
+def get_image_base64(path):
+    if os.path.exists(path):
+        with open(path, "rb") as image_file:
+            encoded = base64.b64encode(image_file.read()).decode()
+            return f"data:image/png;base64,{encoded}"
+    return None
+
+img_escola = get_image_base64("logo_escola.png")
+img_gdf = get_image_base64("logo_gdf.png")
+
 # --- SIDEBAR (BARRA LATERAL REORGANIZADA) ---
 with st.sidebar:
-    # Exibição dos Logotipos Institucionais
-    col_logo1, col_logo2 = st.columns(2)
-    with col_logo1:
-        if os.path.exists("logo_escola.png"):
-            st.image("logo_escola.png", use_container_width=True)
-    with col_logo2:
-        if os.path.exists("logo_gdf.png"):
-            st.image("logo_gdf.png", use_container_width=True)
-            
-    st.markdown("---")
+    # Card de Logos com Balanço Visual via CSS Flexbox
+    if img_escola or img_gdf:
+        logo_escola_html = f'<img src="{img_escola}" class="brand-logo" alt="Escola">' if img_escola else ''
+        logo_gdf_html = f'<img src="{img_gdf}" class="brand-logo" alt="GDF">' if img_gdf else ''
+        st.markdown(f'''
+            <div class="brand-container">
+                {logo_escola_html}
+                {logo_gdf_html}
+            </div>
+        ''', unsafe_allow_html=True)
     
     # Perfil do Utilizador
     email_user = st.session_state.get("email_utilizador", "utilizador@escola.df.gov.br")
@@ -110,7 +153,6 @@ with st.sidebar:
         "🖨️ Relatório da Turma"
     ]
     
-    # Se for Admin, adiciona o painel de gestão
     if perfil_user == "ADMIN":
         opcoes_menu.append("⚙️ Gestão de Acessos")
         
@@ -118,14 +160,21 @@ with st.sidebar:
 
 # --- ÁREA DE CONTEÚDO PRINCIPAL ---
 
-# CABEÇALHO SUPERIOR DA PÁGINA
-col_head1, col_head2 = st.columns([4, 1])
+# CABEÇALHO SUPERIOR DA PÁGINA (COM CARD INSTITUCIONAL HARMONIZADO)
+col_head1, col_head2 = st.columns([3, 1])
 with col_head1:
     st.title("Sistema de Gestão Escolar — DDC")
-    st.caption("Centro de Educação Profissional / Escola Técnica")
+    st.caption("Centro de Educação Profissional — Escola Técnica de Planaltina (CEP-ETP)")
 with col_head2:
-    if os.path.exists("logo_escola.png"):
-        st.image("logo_escola.png", width=90)
+    if img_escola or img_gdf:
+        l_escola = f'<img src="{img_escola}" class="header-logo">' if img_escola else ''
+        l_gdf = f'<img src="{img_gdf}" class="header-logo">' if img_gdf else ''
+        st.markdown(f'''
+            <div class="header-brand-container">
+                {l_escola}
+                {l_gdf}
+            </div>
+        ''', unsafe_allow_html=True)
 
 st.divider()
 
