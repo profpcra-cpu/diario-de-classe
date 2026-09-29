@@ -2,8 +2,8 @@ import io
 import pandas as pd
 import streamlit as st
 
-from modulos.conexao import executar_query
-from modulos.pdf_generator import (
+from .conexao import executar_query
+from .pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
