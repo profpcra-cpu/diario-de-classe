@@ -8,8 +8,6 @@ from modulos.pdf_generator import (
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
     gerar_pdf_passes_turma_unificado,
-    # Se tiver uma função específica para conclusão, importe-a aqui também:
-    # gerar_pdf_declaracao_conclusao, 
 )
 
 
@@ -18,7 +16,7 @@ def renderizar_modulo_secretaria():
         "🎓 Secretaria Escolar - Motor de Ficha Académica e Documentos"
     )
     st.markdown(
-        "Selecione o estudante, escolha o tipo de documento, efetue edições pontuais se necessário e emita a documentação oficial."
+        "Selecione o estudante, escolha o tipo de documento, ajuste os campos específicos se necessário e emita a documentação oficial."
     )
 
     try:
@@ -164,14 +162,14 @@ def renderizar_modulo_secretaria():
 
                     st.markdown("---")
                     st.markdown("### 📝 Editor Personalizado de Documentos (Pré-Impressão)")
-                    st.info("Selecione o tipo de documento e ajuste os campos que deseja modificar antes de gerar o ficheiro final PDF.")
+                    st.info("Selecione o tipo de documento abaixo. Os campos do formulário ajustam-se automaticamente para permitir edições pontuais antes da impressão.")
 
                     # Seleção do documento que deseja ajustar e emitir
                     tipo_documento = st.selectbox(
                         "Selecione o Documento a Emitir:",
                         [
+                            "Passe Estudantil",
                             "Declaração de Escolaridade", 
-                            "Passe Estudantil", 
                             "Declaração de Conclusão", 
                             "Histórico Escolar Oficial"
                         ]
@@ -179,9 +177,9 @@ def renderizar_modulo_secretaria():
 
                     dados_originais = df_dados_pessoais.iloc[0].to_dict()
 
-                    # Formulário de Edição Dinâmica dos Campos do Documento
+                    # Formulário Dinâmico de Edição Pré-Impressão
                     with st.form(key=f"form_edicao_doc_{matricula_busca}"):
-                        st.markdown(f"**A ajustar dados para:** {tipo_documento}")
+                        st.markdown(f"**A ajustar parâmetros para:** `{tipo_documento}`")
                         
                         col_ed1, col_ed2 = st.columns(2)
                         with col_ed1:
@@ -196,17 +194,47 @@ def renderizar_modulo_secretaria():
                             edit_sexo = st.text_input("Sexo:", value=str(dados_originais.get("sexo", "")))
                             edit_data_emissao = st.text_input("Data do Documento:", value="29/09/2026")
 
-                        # Campo de texto customizado para observações ou corpo principal (ex: Carga horária total ou texto de conclusão)
-                        edit_observacao = st.text_area(
-                            "Texto / Observações / Carga Horária Específica:",
-                            value=f"O(a) aluno(a) acima supracitado(a) concluiu o referido curso, sendo a carga horária total de horas."
-                        )
+                        # Campos específicos caso o documento selecionado seja o Passe Estudantil (com Endereço e Observações de Turno)
+                        if tipo_documento == "Passe Estudantil":
+                            st.markdown("---")
+                            st.markdown("📍 **Campos Específicos de Endereço e Observações (Passe Estudantil):**")
+                            
+                            col_end1, col_end2, col_end3 = st.columns(3)
+                            with col_end1:
+                                edit_endereco = st.text_input("Endereço (Rua/Quadra):", value=str(dados_originais.get("endereco", "QUADRA 1, CONJUNTO I 1, CASA 16")))
+                            with col_end2:
+                                edit_bairro = st.text_input("Bairro:", value=str(dados_originais.get("bairro", "SRO")))
+                            with col_end3:
+                                edit_cep = st.text_input("CEP:", value=str(dados_originais.get("cep", "73343013")))
+
+                            edit_observacao_passe = st.text_area(
+                                "Texto / Observações do Passe (Turnos e Períodos Letivos):",
+                                value=(
+                                    "Turno Matutino: Aulas de 8h00min às 12h00min, de segunda-feira a sexta-feira.\n"
+                                    "Turno Vespertino: Aulas de 13h30min às 17h30min, de segunda-feira a sexta-feira.\n"
+                                    "Turno Noturno: Aulas de 19h00min às 23h00min, de segunda-feira a sexta-feira.\n"
+                                    "Declaração válida somente sem emendas e sem rasuras por 30 dias.\n"
+                                    "Início do 1º Semestre Letivo: 12/02/2026 – Término: 10/07/2026.\n"
+                                    "Início do 2º Semestre Letivo: 28/07/2026 – Término: 22/12/2026.\n"
+                                    "Observação: O(a) aluno(a) está regularmente matriculado(a) nesta Instituição de Ensino."
+                                ),
+                                height=150
+                            )
+                        else:
+                            # Campos genéricos para outros tipos de declaração
+                            edit_endereco = str(dados_originais.get("endereco", ""))
+                            edit_bairro = str(dados_originais.get("bairro", ""))
+                            edit_cep = str(dados_originais.get("cep", ""))
+                            edit_observacao_passe = st.text_area(
+                                "Texto / Observações / Carga Horária Específica:",
+                                value=f"O(a) aluno(a) acima supracitado(a) concluiu o referido curso, sendo a carga horária total de horas."
+                            )
 
                         botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
 
                     # Ação executada após submeter o formulário de edição
                     if botao_gerar_editado:
-                        # Criar dicionário consolidado com as alterações feitas pelo utilizador
+                        # Consolidar dados customizados
                         dados_customizados = dados_originais.copy()
                         dados_customizados["nome"] = edit_nome
                         dados_customizados["curso"] = edit_curso
@@ -216,7 +244,10 @@ def renderizar_modulo_secretaria():
                         dados_customizados["data_nascimento"] = edit_nasc
                         dados_customizados["sexo"] = edit_sexo
                         dados_customizados["data_emissao"] = edit_data_emissao
-                        dados_customizados["observacao"] = edit_observacao
+                        dados_customizados["endereco"] = edit_endereco
+                        dados_customizados["bairro"] = edit_bairro
+                        dados_customizados["cep"] = edit_cep
+                        dados_customizados["observacao"] = edit_observacao_passe
 
                         df_para_pdf = (
                             df_historico_editado
@@ -224,20 +255,17 @@ def renderizar_modulo_secretaria():
                             else df_historico_aluno
                         )
 
-                        # Direciona para a função de PDF correspondente utilizando os dados ajustados
-                        if tipo_documento == "Declaração de Escolaridade":
-                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
-                            nome_ficheiro = f"declaracao_escolaridade_{matricula_busca}.pdf"
-
-                        elif tipo_documento == "Passe Estudantil":
+                        # Direciona para a função de PDF correta
+                        if tipo_documento == "Passe Estudantil":
                             pdf_bytes_gerado = gerar_pdf_passe_estudantil(dados_customizados)
                             nome_ficheiro = f"passe_estudantil_{matricula_busca}.pdf"
 
+                        elif tipo_documento == "Declaração de Escolaridade":
+                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
+                            nome_ficheiro = f"declaracao_escolaridade_{matricula_busca}.pdf"
+
                         elif tipo_documento == "Declaração de Conclusão":
-                            # Se tiveres a função de conclusão criada, chame-a aqui. 
-                            # Exemplo: pdf_bytes_gerado = gerar_pdf_declaracao_conclusao(dados_customizados)
-                            # Caso contrário, pode usar provisoriamente uma base ou adaptar:
-                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados) 
+                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
                             nome_ficheiro = f"declaracao_conclusao_{matricula_busca}.pdf"
 
                         else:  # Histórico Escolar Oficial
@@ -258,7 +286,7 @@ def renderizar_modulo_secretaria():
                     # EMISSÃO UNIFICADA EM LOTE (POR TURMA)
                     # ---------------------------------------------------------
                     st.markdown("---")
-                    st.markdown("### 📚 Emissão Unificada em Lote (Turma Inteira)")
+                    st.markdown("### 📚 Emissão Unificada em Lote (Passes de Toda a Turma)")
                     
                     turma_atual = dados_originais.get("turma")
                     if turma_atual:
