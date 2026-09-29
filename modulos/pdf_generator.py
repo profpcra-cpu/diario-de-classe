@@ -1804,3 +1804,232 @@ def gerar_pdf_passes_turma_unificado(df_turma_alunos):
     
     output_buffer.seek(0)
     return output_buffer.getvalue()
+
+
+
+
+
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+
+
+class NumberedCanvas(canvas.Canvas):
+    """Canvas para gerir numeração de páginas se necessário."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+    def draw_page_number(self, page_count):
+        self.saveState()
+        self.setFont("Helvetica", 9)
+        self.drawString(
+            50, 30, f"Pág. {self._pageNumber} de {page_count}"
+        )
+        self.restoreState()
+
+
+def gerar_pdf_renovacao_matricula(dados_aluno):
+    """Gera o PDF da Ficha de Renovação de Matrícula para um aluno individual."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    largura, altura = A4
+
+    # Cabeçalho Institucional
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(
+        largura / 2, altura - 40, "Governo do Distrito Federal"
+    )
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(largura / 2, altura - 55, "Secretaria de Estado de Educação")
+    c.drawCentredString(
+        largura / 2, altura - 68, "Subsecretaria de Educação Básica"
+    )
+    c.drawCentredString(
+        largura / 2, altura - 81, "Coordenação Regional de Ensino de Planaltina"
+    )
+    c.drawCentredString(
+        largura / 2,
+        altura - 94,
+        "Centro de Educação Profissional Escola Técnica de Planaltina",
+    )
+
+    # Título do Documento
+    c.setFont("Helvetica-Bold", 11)
+    c.rect(40, altura - 130, largura - 80, 20, fill=0, stroke=1)
+    c.drawCentredString(largura / 2, altura - 116, "RENOVAÇÃO DE MATRÍCULA")
+
+    # Dados do Aluno / Tabela visual
+    c.setFont("Helvetica", 9)
+    y = altura - 160
+    c.drawString(
+        50,
+        y,
+        f"Curso: {dados_aluno.get('curso', 'TÉCNICO EM ENFERMAGEM')}",
+    )
+    y -= 20
+    c.drawString(
+        50,
+        y,
+        f"Matrícula: {dados_aluno.get('matricula', '')}    Turma/Turno: {dados_aluno.get('turma', '')}    Nome: {dados_aluno.get('nome', '')}",
+    )
+    y -= 20
+    c.drawString(
+        50,
+        y,
+        f"Data de Nasc.: {dados_aluno.get('data_nascimento', '')}    Nacionalidade: {dados_aluno.get('nacionalidade', 'BRASILEIRA')}    Naturalidade: {dados_aluno.get('naturalidade', '')} - {dados_aluno.get('uf', 'DF')}",
+    )
+    y -= 20
+    c.drawString(
+        50,
+        y,
+        f"Identidade (RG): {dados_aluno.get('identidade', '')}    CPF: {dados_aluno.get('cpf', '')}",
+    )
+    y -= 20
+    c.drawString(
+        50, y, f"Nome da Mãe: {dados_aluno.get('nome_mae', '')}"
+    )
+    y -= 20
+    c.drawString(
+        50, y, f"Nome do Pai: {dados_aluno.get('nome_pai', '')}"
+    )
+
+    # Bloco de Observações / Perguntas de Renovação
+    y -= 40
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(50, y, "Observações e Confirmação de Matrícula:")
+    c.setFont("Helvetica", 9)
+    y -= 20
+    c.drawString(
+        50,
+        y,
+        "1. Deseja renovar a matrícula para o 2º semestre de 2026? [ X ] Sim  [   ] Não",
+    )
+    y -= 18
+    c.drawString(
+        50,
+        y,
+        "2. Está cursando o Ensino Médio atualmente? [ X ] Sim  [   ] Não",
+    )
+    y -= 18
+    c.drawString(
+        50,
+        y,
+        "3. A renovação de matrícula não é automática. O estudante que não efetiva-la",
+    )
+    y -= 14
+    c.drawString(
+        50,
+        y,
+        "    no período determinado perderá o direito à vaga.",
+    )
+
+    # Assinatura
+    y -= 120
+    c.line(largura / 2 - 120, y, largura / 2 + 120, y)
+    c.drawCentredString(largura / 2, y - 15, "Assinatura do(a) Estudante")
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def gerar_pdf_renovacao_turma_unificado(df_turma):
+    """Gera um PDF unificado contendo as fichas de renovação de todos os alunos da turma."""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    largura, altura = A4
+
+    for index, row in df_turma.iterrows():
+        dados_aluno = row.to_dict()
+
+        # Desenhar cabeçalho idêntico para cada aluno na sua respetiva página
+        c.setFont("Helvetica-Bold", 12)
+        c.drawCentredString(
+            largura / 2, altura - 40, "Governo do Distrito Federal"
+        )
+        c.setFont("Helvetica", 9)
+        c.drawCentredString(
+            largura / 2, altura - 55, "Secretaria de Estado de Educação"
+        )
+        c.drawCentredString(
+            largura / 2, altura - 68, "Subsecretaria de Educação Básica"
+        )
+        c.drawCentredString(
+            largura / 2,
+            altura - 81,
+            "Coordenação Regional de Ensino de Planaltina",
+        )
+        c.drawCentredString(
+            largura / 2,
+            altura - 94,
+            "Centro de Educação Profissional Escola Técnica de Planaltina",
+        )
+
+        c.setFont("Helvetica-Bold", 11)
+        c.rect(40, altura - 130, largura - 80, 20, fill=0, stroke=1)
+        c.drawCentredString(largura / 2, altura - 116, "RENOVAÇÃO DE MATRÍCULA")
+
+        c.setFont("Helvetica", 9)
+        y = altura - 160
+        c.drawString(
+            50,
+            y,
+            f"Curso: {dados_aluno.get('curso', 'TÉCNICO EM ENFERMAGEM')}",
+        )
+        y -= 20
+        c.drawString(
+            50,
+            y,
+            f"Matrícula: {dados_aluno.get('matricula', '')}    Turma: {dados_aluno.get('turma', '')}    Nome: {dados_aluno.get('nome', '')}",
+        )
+        y -= 20
+        c.drawString(
+            50,
+            y,
+            f"Data Nasc.: {dados_aluno.get('data_nascimento', '')}    Identidade: {dados_aluno.get('identidade', '')}    CPF: {dados_aluno.get('cpf', '')}",
+        )
+        y -= 20
+        c.drawString(
+            50, y, f"Mãe: {dados_aluno.get('nome_mae', '')}"
+        )
+        y -= 20
+        c.drawString(
+            50, y, f"Pai: {dados_aluno.get('nome_pai', '')}"
+        )
+
+        y -= 50
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(50, y, "Confirmação:")
+        c.setFont("Helvetica", 9)
+        y -= 20
+        c.drawString(
+            50,
+            y,
+            "1. Deseja renovar a matrícula para o 2º semestre de 2026? [ X ] Sim  [   ] Não",
+        )
+
+        y -= 120
+        c.line(largura / 2 - 120, y, largura / 2 + 120, y)
+        c.drawCentredString(largura / 2, y - 15, "Assinatura do(a) Estudante")
+
+        # Avançar para a próxima página para o próximo aluno
+        c.showPage()
+
+    c.save()
+    buffer.seek(0)
+    return buffer.getvalue()
