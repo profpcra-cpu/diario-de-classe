@@ -1181,7 +1181,6 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Table, Table
 def gerar_pdf_declaracao_escolaridade(dados_aluno):
     """Gera o PDF da Declaração de Escolaridade em conformidade com o layout oficial."""
     
-    # Função auxiliar robusta para buscar chaves independentemente de maiúsculas/minúsculas ou espaços
     def get_dado(dados, *chaves):
         if not isinstance(dados, dict):
             return ""
@@ -1190,7 +1189,6 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
                 val = str(dados[chave]).strip()
                 if val and val.lower() != "none":
                     return val
-            # Tentar variações (maiúsculas, minúsculas, com/sem underscore)
             target = chave.lower().replace(" ", "_")
             for k, v in dados.items():
                 if k.lower().replace(" ", "_") == target:
@@ -1314,7 +1312,6 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
             Paragraph(f"<b>{v}</b>", style_val),
         ]
 
-    # Mapeamento robusto dos dados com fallbacks
     curso = get_dado(dados_aluno, "curso")
     matricula = get_dado(dados_aluno, "matricula", "matricula_aluno")
     turma = get_dado(dados_aluno, "turma", "turma_turno")
@@ -1329,8 +1326,15 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
     data_expedicao = get_dado(dados_aluno, "data_expedicao", "data_exp")
     cpf = get_dado(dados_aluno, "cpf")
     nome_mae = get_dado(dados_aluno, "nome_mae", "nome_da_mae", "nome da mae", "mae")
-    nome_pai = get_dado(dados_aluno, "nome_pai", "nome_do_pai", "nome do pai", "pai")
     
+    # Tratamento para o nome do pai (ignora se for vazio, "não sei", "não informado", etc.)
+    raw_pai = get_dado(dados_aluno, "nome_pai", "nome_do_pai", "nome do pai", "pai")
+    ignorar_pai = ["não sei", "nao sei", "não informado", "nao informado", "não", "nao", "-"]
+    if raw_pai.lower() in ignorar_pai:
+        nome_pai = ""
+    else:
+        nome_pai = raw_pai
+
     endereco_completo = get_dado(dados_aluno, "endereco")
     bairro = get_dado(dados_aluno, "bairro")
     endereco_final = f"{endereco_completo} {bairro}".strip()
@@ -1388,8 +1392,8 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
         ],
     ]
 
-    # Ajuste de larguras para evitar quebras indesejadas em "Nacionalidade" e "Sexo"
-    col_widths = [65, 80, 70, 35, 110, 48, 60, 55]
+    # Ajustado a 1ª coluna para 75 para o CPF não quebrar, reequilibrando as demais
+    col_widths = [75, 75, 70, 35, 105, 45, 59, 59]
     tabela_dados = Table(dados_grid, colWidths=col_widths)
     tabela_dados.setStyle(
         TableStyle([
