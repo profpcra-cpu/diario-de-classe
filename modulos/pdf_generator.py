@@ -1180,6 +1180,26 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Table, Table
 
 def gerar_pdf_declaracao_escolaridade(dados_aluno):
     """Gera o PDF da Declaração de Escolaridade em conformidade com o layout oficial."""
+    
+    # Função auxiliar robusta para buscar chaves independentemente de maiúsculas/minúsculas ou espaços
+    def get_dado(dados, *chaves):
+        if not isinstance(dados, dict):
+            return ""
+        for chave in chaves:
+            if chave in dados and dados[chave] is not None:
+                val = str(dados[chave]).strip()
+                if val and val.lower() != "none":
+                    return val
+            # Tentar variações (maiúsculas, minúsculas, com/sem underscore)
+            target = chave.lower().replace(" ", "_")
+            for k, v in dados.items():
+                if k.lower().replace(" ", "_") == target:
+                    if v is not None:
+                        val = str(v).strip()
+                        if val and val.lower() != "none":
+                            return val
+        return ""
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -1294,78 +1314,82 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
             Paragraph(f"<b>{v}</b>", style_val),
         ]
 
+    # Mapeamento robusto dos dados com fallbacks
+    curso = get_dado(dados_aluno, "curso")
+    matricula = get_dado(dados_aluno, "matricula", "matricula_aluno")
+    turma = get_dado(dados_aluno, "turma", "turma_turno")
+    nome = get_dado(dados_aluno, "nome", "nome_aluno")
+    sexo = get_dado(dados_aluno, "sexo")
+    data_nascimento = get_dado(dados_aluno, "data_nascimento", "dt_nascimento", "dt nascimento")
+    nacionalidade = get_dado(dados_aluno, "nacionalidade") or "BRASILEIRA"
+    naturalidade = get_dado(dados_aluno, "naturalidade", "cidade")
+    uf = get_dado(dados_aluno, "uf", "uf_endereco") or "DF"
+    rg = get_dado(dados_aluno, "rg", "identidade")
+    orgao_expeditor = get_dado(dados_aluno, "orgao_expeditor", "orgao_exp")
+    data_expedicao = get_dado(dados_aluno, "data_expedicao", "data_exp")
+    cpf = get_dado(dados_aluno, "cpf")
+    nome_mae = get_dado(dados_aluno, "nome_mae", "nome_da_mae", "nome da mae", "mae")
+    nome_pai = get_dado(dados_aluno, "nome_pai", "nome_do_pai", "nome do pai", "pai")
+    
+    endereco_completo = get_dado(dados_aluno, "endereco")
+    bairro = get_dado(dados_aluno, "bairro")
+    endereco_final = f"{endereco_completo} {bairro}".strip()
+    cep = get_dado(dados_aluno, "cep")
+
     dados_grid = [
         # Linha 1: Curso
         [
-            celula("Curso:", dados_aluno.get("curso", "")),
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
+            celula("Curso:", curso),
+            "", "", "", "", "", "", "",
         ],
         # Linha 2: Matrícula / Turma / Nome / Sexo
         [
-            celula("Matrícula:", dados_aluno.get("matricula", "")),
+            celula("Matrícula:", matricula),
             "",
-            celula("Turma/Turno:", dados_aluno.get("turma", "")),
+            celula("Turma/Turno:", turma),
             "",
-            celula("Nome:", dados_aluno.get("nome", "")),
-            "",
-            "",
-            celula("Sexo:", dados_aluno.get("sexo", "")),
+            celula("Nome:", nome),
+            "", "",
+            celula("Sexo:", sexo),
         ],
         # Linha 3: Dt Nasc / Nacionalidade / Naturalidade / UF / RG / Org.Exp / Dt.Exp
         [
-            celula("Data de Nascimento:", dados_aluno.get("data_nascimento", "")),
-            celula("Nacionalidade:", dados_aluno.get("nacionalidade", "BRASILEIRA")),
-            celula("Naturalidade:", dados_aluno.get("naturalidade", "")),
-            celula("UF:", dados_aluno.get("uf", "DF")),
-            celula("Identidade:", dados_aluno.get("rg", "")),
-            celula("Órg. Exp.:", dados_aluno.get("orgao_expeditor", "")),
-            celula("Data de Expedição:", dados_aluno.get("data_expedicao", "")),
+            celula("Data de Nascimento:", data_nascimento),
+            celula("Nacionalidade:", nacionalidade),
+            celula("Naturalidade:", naturalidade),
+            celula("UF:", uf),
+            celula("Identidade:", rg),
+            celula("Órg. Exp.:", orgao_expeditor),
+            celula("Data de Expedição:", data_expedicao),
             "",
         ],
-        # Linha 4: CPF / Filiação
+        # Linha 4: CPF / Filiação (Mãe)
         [
-            celula("CPF:", dados_aluno.get("cpf", "")),
+            celula("CPF:", cpf),
             "",
-            celula("Nome da Mãe:", dados_aluno.get("nome_mae", "")),
-            "",
-            "",
-            "",
-            "",
-            "",
+            celula("Nome da Mãe:", nome_mae),
+            "", "", "", "", "",
         ],
+        # Linha 5: Filiação (Pai)
         [
             "",
             "",
-            celula("Nome do Pai:", dados_aluno.get("nome_pai", "")),
-            "",
-            "",
-            "",
-            "",
-            "",
+            celula("Nome do Pai:", nome_pai),
+            "", "", "", "", "",
         ],
-        # Linha 5: Endereço
+        # Linha 6: Endereço
         [
-            celula(
-                "Endereço:",
-                f"{dados_aluno.get('endereco', '')} {dados_aluno.get('bairro', '')}".strip(),
-            ),
+            celula("Endereço:", endereco_final),
+            "", "", "",
+            celula("CEP:", cep),
             "",
-            "",
-            "",
-            celula("CEP:", dados_aluno.get("cep", "")),
-            "",
-            celula("UF:", dados_aluno.get("uf", "DF")),
+            celula("UF:", uf),
             "",
         ],
     ]
 
-    col_widths = [70, 70, 75, 40, 110, 50, 58, 50]
+    # Ajuste de larguras para evitar quebras indesejadas em "Nacionalidade" e "Sexo"
+    col_widths = [65, 80, 70, 35, 110, 48, 60, 55]
     tabela_dados = Table(dados_grid, colWidths=col_widths)
     tabela_dados.setStyle(
         TableStyle([
