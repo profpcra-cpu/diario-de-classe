@@ -13,11 +13,135 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from modulos.conexao import executar_query
 
 
+# ======================================================================
+# CONSTANTES GLOBAIS (evitam recriação a cada chamada)
+# ======================================================================
+LARGURA_UTIL = 554.0
+MARGEM_LATERAL = 20.6
+
+CINZA_TEXTO  = colors.HexColor("#263238")
+CINZA_MEDIO  = colors.HexColor("#5F6B72")
+CINZA_LINHA  = colors.HexColor("#A0AAB0")
+CINZA_CAB    = colors.HexColor("#E7EAEC")
+CINZA_ZEBRA  = colors.HexColor("#FAFAFA")
+CINZA_RODAPE = colors.HexColor("#F7F8F8")
+PRETO        = colors.HexColor("#111111")
+
+BASE_LEGAL_PADRAO = (
+    "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 04/99 - CEB/CNE, "
+    "RESOLUÇÃO Nº 02/2023 - CEDF, PARECER Nº 27/2013-CEDF, PORTARIA Nº 56/2013 SEDF"
+)
+
+CURSO_PADRAO = "CURSO TÉCNICO EM NUTRIÇÃO E DIETÉTICA"
+VALORES_INVALIDOS = {"", "nan", "none", "null"}
+
+_COLUNAS_HISTORICO = {
+    "componente": ("unidade_curricular", "componente", "disciplina"),
+    "ch":         ("carga_horaria", "ch"),
+    "resultado":  ("resultado", "conceito"),
+}
+
+
+# ======================================================================
+# ESTILOS (criados uma única vez em nível de módulo)
+# ======================================================================
+def _build_styles():
+    base = getSampleStyleSheet()
+
+    def _p(name, parent, **kw):
+        return ParagraphStyle(name, parent=parent, **kw)
+
+    inst = _p("Institucional", base["Normal"],
+              fontName="Helvetica", fontSize=7.5, leading=8.5,
+              alignment=TA_CENTER, textColor=PRETO)
+
+    return {
+        "institucional": inst,
+        "institucional_bold": _p("InstitucionalBold", inst,
+                                 fontName="Helvetica-Bold", fontSize=7.8, leading=8.8),
+        "titulo": _p("TituloHistorico", base["Heading1"],
+                     fontName="Helvetica-Bold", fontSize=12, leading=14,
+                     alignment=TA_CENTER, textColor=PRETO,
+                     spaceBefore=3, spaceAfter=3),
+        "label": _p("Label", base["Normal"],
+                    fontName="Helvetica-Bold", fontSize=6.0, leading=6.8,
+                    textColor=CINZA_MEDIO, spaceAfter=1),
+        "valor": _p("Valor", base["Normal"],
+                    fontName="Helvetica", fontSize=7.2, leading=8.2,
+                    textColor=CINZA_TEXTO),
+        "valor_bold": _p("ValorBold", base["Normal"],
+                         fontName="Helvetica-Bold", fontSize=7.2, leading=8.2,
+                         textColor=PRETO),
+        "th": _p("TH", base["Normal"],
+                 fontName="Helvetica-Bold", fontSize=6.8, leading=7.6,
+                 alignment=TA_CENTER, textColor=PRETO),
+        "td": _p("TD", base["Normal"],
+                 fontName="Helvetica", fontSize=6.8, leading=7.6,
+                 alignment=TA_CENTER, textColor=CINZA_TEXTO),
+        "td_left": _p("TDLeft", base["Normal"],
+                      fontName="Helvetica", fontSize=6.8, leading=7.6,
+                      alignment=TA_LEFT, textColor=CINZA_TEXTO),
+        "rodape": _p("Rodape", base["Normal"],
+                     fontName="Helvetica", fontSize=6.5, leading=7.5,
+                     textColor=CINZA_MEDIO),
+        "assinatura": _p("Assinatura", base["Normal"],
+                         fontName="Helvetica", fontSize=7, leading=8,
+                         alignment=TA_CENTER, textColor=PRETO),
+    }
+
+STYLES = _build_styles()
+
+
+# ======================================================================
+# HELPERS
+# ======================================================================
+def _valor(d, *chaves, padrao=""):
+    """Retorna o primeiro valor válido entre as chaves fornecidas."""
+    for chave in chaves:
+        v = d.get(chave)
+        if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
+            return str(v).strip()
+    return padrao
+
+
+def _buscar_base_legal(sigla, turma):
+    """Consulta a base legal; retorna o padrão em caso de falha."""
+    if not (sigla and turma):
+        return BASE_LEGAL_PADRAO
+    try:
+        df = executar_query(
+            "SELECT base_legal FROM TB_BASE_LEGAL WHERE sigla = %s AND turma = %s",
+            params=(sigla, turma),
+        )
+        if not df.empty:
+            texto = df.iloc[0]["base_legal"]
+            if pd.notnull(texto) and str(texto).strip():
+                return str(texto).strip()
+    except Exception as exc:
+        # Log em vez de silenciar completamente
+        print(f"[gerar_pdf_historico_aluno] Falha ao buscar base legal: {exc}")
+    return BASE_LEGAL_PADRAO
+
+
+def _carregar_logo(path, width=38, height=38):
+    """Carrega a imagem se existir; caso contrário, devolve Paragraph vazio."""
+    if os.path.exists(path):
+        return Image(path, width=width, height=height)
+    return Paragraph("", STYLES["valor"])
+
+
+def _celula_campo(rotulo, valor_txt, negrito=False):
+    return [
+        Paragraph(rotulo, STYLES["label"]),
+        Paragraph(valor_txt or "—", STYLES["valor_bold" if negrito else "valor"]),
+    ]
+
+
+# ======================================================================
+# FUNÇÃO PRINCIPAL
+# ======================================================================
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """
-    Gera o Histórico Escolar em A4, com diagramação baseada na proposta visual,
-    alinhamento rigoroso de colunas (largura útil total: 554 pt) e correção de campos.
-    """
+    """Gera o Histórico Escolar em A4."""
 
     # Compatibilidade com chamada invertida
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
@@ -25,138 +149,19 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     buffer = io.BytesIO()
 
-    # ------------------------------------------------------------------
-    # CONFIGURAÇÃO DO DOCUMENTO (Largura útil exata: 554 pt)
-    # A4 = 595.27 de largura. Margens de 20.6 pt à esquerda e direita.
-    # ------------------------------------------------------------------
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=20.6,
-        leftMargin=20.6,
+        rightMargin=MARGEM_LATERAL,
+        leftMargin=MARGEM_LATERAL,
         topMargin=20,
         bottomMargin=22,
         title="Histórico Escolar",
-        author="Centro de Educação Profissional Escola Técnica de Planaltina"
-    )
-
-    styles = getSampleStyleSheet()
-
-    # ------------------------------------------------------------------
-    # PALETA DE CORES
-    # ------------------------------------------------------------------
-    CINZA_TEXTO = colors.HexColor("#263238")
-    CINZA_MEDIO = colors.HexColor("#5F6B72")
-    CINZA_LINHA = colors.HexColor("#A0AAB0")
-    CINZA_CAB = colors.HexColor("#E7EAEC")
-    PRETO = colors.HexColor("#111111")
-
-    # ------------------------------------------------------------------
-    # ESTILOS
-    # ------------------------------------------------------------------
-    estilo_institucional = ParagraphStyle(
-        "Institucional",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=7.5,
-        leading=8.5,
-        alignment=TA_CENTER,
-        textColor=PRETO
-    )
-
-    estilo_institucional_bold = ParagraphStyle(
-        "InstitucionalBold",
-        parent=estilo_institucional,
-        fontName="Helvetica-Bold",
-        fontSize=7.8,
-        leading=8.8
-    )
-
-    estilo_titulo = ParagraphStyle(
-        "TituloHistorico",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=12,
-        leading=14,
-        alignment=TA_CENTER,
-        textColor=PRETO,
-        spaceBefore=3,
-        spaceAfter=3
-    )
-
-    estilo_label = ParagraphStyle(
-        "Label",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=6.0,
-        leading=6.8,
-        textColor=CINZA_MEDIO,
-        spaceAfter=1
-    )
-
-    estilo_valor = ParagraphStyle(
-        "Valor",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=7.2,
-        leading=8.2,
-        textColor=CINZA_TEXTO
-    )
-
-    estilo_valor_bold = ParagraphStyle(
-        "ValorBold",
-        parent=estilo_valor,
-        fontName="Helvetica-Bold",
-        textColor=PRETO
-    )
-
-    estilo_th = ParagraphStyle(
-        "TH",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=6.8,
-        leading=7.6,
-        alignment=TA_CENTER,
-        textColor=PRETO
-    )
-
-    estilo_td = ParagraphStyle(
-        "TD",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=6.8,
-        leading=7.6,
-        alignment=TA_CENTER,
-        textColor=CINZA_TEXTO
-    )
-
-    estilo_td_left = ParagraphStyle(
-        "TDLeft",
-        parent=estilo_td,
-        alignment=TA_LEFT
-    )
-
-    estilo_rodape = ParagraphStyle(
-        "Rodape",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=6.5,
-        leading=7.5,
-        textColor=CINZA_MEDIO
-    )
-
-    estilo_assinatura = ParagraphStyle(
-        "Assinatura",
-        parent=styles["Normal"],
-        fontName="Helvetica",
-        fontSize=7,
-        leading=8,
-        alignment=TA_CENTER,
-        textColor=PRETO
+        author="Centro de Educação Profissional Escola Técnica de Planaltina",
     )
 
     # ------------------------------------------------------------------
-    # TRATAMENTO DOS DADOS DO ALUNO
+    # Dados do aluno
     # ------------------------------------------------------------------
     if isinstance(dados_aluno, dict):
         d = dados_aluno
@@ -165,387 +170,275 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     else:
         d = {}
 
-    def valor(*chaves, padrao=""):
-        for chave in chaves:
-            v = d.get(chave)
-            if v is not None and str(v).strip() not in ("", "nan", "None"):
-                return str(v).strip()
-        return padrao
+    sigla  = _valor(d, "sigla")
+    turma  = _valor(d, "turma")
+    curso  = _valor(d, "curso", padrao=CURSO_PADRAO).upper()
+    nome   = _valor(d, "nome").upper()
+    cpf    = _valor(d, "cpf")
+    sexo   = _valor(d, "sexo").upper()
+    mae    = _valor(d, "mae", "nome_mae").upper()
+    pai    = _valor(d, "pai", "nome_pai").upper()
+    dt_nasc = _valor(d, "data_nascimento")
+    matricula = _valor(d, "matricula", "matrícula")
 
-    curso = valor("curso", padrao="CURSO TÉCNICO EM NUTRIÇÃO E DIETÉTICA").upper()
-    matricula = valor("matricula", "matrícula")
-    turma = valor("turma")
-    sigla = valor("sigla")
-    nome = valor("nome").upper()
-    cpf = valor("cpf")
-    sexo = valor("sexo").upper()
-    mae = valor("mae", "nome_mae").upper()
-    pai = valor("pai", "nome_pai").upper()
-    dt_nasc = valor("data_nascimento")
-    
-    # Tratamento para remover espaços incorretos em palavras como "BRASILEIRA"
-    nacionalidade = valor("nacionalidade", padrao="BRASILEIRA").upper().replace(" ", "")
-    if not nacionalidade:
-        nacionalidade = "BRASILEIRA"
-        
-    naturalidade = valor("naturalidade").upper()
-    uf = valor("uf", padrao="DF").upper()
-    rg = valor("rg")
-    orgao = valor("orgao_expeditor", "orgao").upper()
-    dt_exp = valor("data_expedicao")
+    nacionalidade = (_valor(d, "nacionalidade", padrao="BRASILEIRA")
+                     .upper().replace(" ", "")) or "BRASILEIRA"
 
-    # Formatação combinada de RG / Órgão / Expedição para evitar confusão com datas
-    doc_rg_partes = [x for x in [rg, orgao, dt_exp] if x]
-    doc_rg_str = " - ".join(doc_rg_partes) if doc_rg_partes else "—"
+    naturalidade = _valor(d, "naturalidade").upper()
+    uf = _valor(d, "uf", padrao="DF").upper()
+
+    rg     = _valor(d, "rg")
+    orgao  = _valor(d, "orgao_expeditor", "orgao").upper()
+    dt_exp = _valor(d, "data_expedicao")
+    doc_rg_str = " - ".join(x for x in (rg, orgao, dt_exp) if x) or "—"
+
+    base_legal_texto = _buscar_base_legal(sigla, turma)
 
     # ------------------------------------------------------------------
-    # BASE LEGAL
+    # Cabeçalho
     # ------------------------------------------------------------------
-    base_legal_texto = (
-        "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 04/99 - CEB/CNE, "
-        "RESOLUÇÃO Nº 02/2023 - CEDF, PARECER Nº 27/2013-CEDF, PORTARIA Nº 56/2013 SEDF"
-    )
-
-    if sigla and turma:
-        try:
-            df_bl = executar_query(
-                """
-                SELECT base_legal
-                FROM TB_BASE_LEGAL
-                WHERE sigla = %s AND turma = %s
-                """,
-                params=(sigla, turma)
-            )
-
-            if (
-                not df_bl.empty
-                and pd.notnull(df_bl.iloc[0]["base_legal"])
-                and str(df_bl.iloc[0]["base_legal"]).strip()
-            ):
-                base_legal_texto = str(df_bl.iloc[0]["base_legal"]).strip()
-        except Exception:
-            pass
-
-    # ------------------------------------------------------------------
-    # LOGOS E CABEÇALHO
-    # ------------------------------------------------------------------
-    path_logo_gdf = "logo_gdf.png"
-    path_logo_escola = "logo_escola.png"
-
-    img_gdf = (
-        Image(path_logo_gdf, width=38, height=38)
-        if os.path.exists(path_logo_gdf)
-        else Paragraph("", estilo_valor)
-    )
-
-    img_escola = (
-        Image(path_logo_escola, width=38, height=38)
-        if os.path.exists(path_logo_escola)
-        else Paragraph("", estilo_valor)
-    )
-
     texto_institucional = [
-        Paragraph("GOVERNO DO DISTRITO FEDERAL", estilo_institucional_bold),
-        Paragraph("Secretaria de Estado de Educação", estilo_institucional),
-        Paragraph("Subsecretaria de Educação Básica", estilo_institucional),
-        Paragraph("Coordenação Regional de Ensino de Planaltina", estilo_institucional),
-        Paragraph(
-            "Centro de Educação Profissional Escola Técnica de Planaltina",
-            estilo_institucional_bold
-        ),
+        Paragraph("GOVERNO DO DISTRITO FEDERAL", STYLES["institucional_bold"]),
+        Paragraph("Secretaria de Estado de Educação", STYLES["institucional"]),
+        Paragraph("Subsecretaria de Educação Básica", STYLES["institucional"]),
+        Paragraph("Coordenação Regional de Ensino de Planaltina", STYLES["institucional"]),
+        Paragraph("Centro de Educação Profissional Escola Técnica de Planaltina",
+                  STYLES["institucional_bold"]),
     ]
 
     cabecalho = Table(
-        [[img_gdf, texto_institucional, img_escola]],
+        [[_carregar_logo("logo_gdf.png"), texto_institucional, _carregar_logo("logo_escola.png")]],
         colWidths=[45, 464, 45],
         rowHeights=[45],
-        hAlign="LEFT"
+        hAlign="LEFT",
     )
-
     cabecalho.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (0, 0), (0, 0), "CENTER"),
-        ("ALIGN", (2, 0), (2, 0), "CENTER"),
-        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
         ("LINEBELOW", (0, 0), (-1, -1), 0.8, CINZA_LINHA),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
 
-    story = []
-    story.append(cabecalho)
-    story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo))
+    story = [
+        cabecalho,
+        Paragraph("HISTÓRICO ESCOLAR", STYLES["titulo"]),
+    ]
 
     # ------------------------------------------------------------------
-    # ORGANIZAÇÃO DAS LINHAS DO ESTUDANTE (GRELHA DE DADOS)
-    # Largura total: 554 pt. Distribuição: [200, 110, 144, 100]
+    # Grelha de dados do estudante
     # ------------------------------------------------------------------
-    def celula_campo(rotulo, valor_txt, em_negrito=False):
-        est_val = estilo_valor_bold if em_negrito else estilo_valor
-        return [
-            Paragraph(rotulo, estilo_label),
-            Paragraph(valor_txt or "—", est_val)
-        ]
-
     dados_estudante_grid = [
-        # Linha 1: Curso / Nome / CPF / Sexo
         [
-            celula_campo("Curso", curso, em_negrito=True),
-            celula_campo("Nome", nome, em_negrito=True),
-            celula_campo("CPF", cpf),
-            celula_campo("Sexo", sexo),
+            _celula_campo("Curso", curso, True),
+            _celula_campo("Nome", nome, True),
+            _celula_campo("CPF", cpf),
+            _celula_campo("Sexo", sexo),
         ],
-        # Linha 2: Matrícula / Turma / Mãe / Pai
         [
-            celula_campo("Matrícula", matricula, em_negrito=True),
-            celula_campo("Turma", turma, em_negrito=True),
-            celula_campo("Nome da Mãe", mae),
-            celula_campo("Nome do Pai", pai),
+            _celula_campo("Matrícula", matricula, True),
+            _celula_campo("Turma", turma, True),
+            _celula_campo("Nome da Mãe", mae),
+            _celula_campo("Nome do Pai", pai),
         ],
-        # Linha 3: Data Nasc. / Nacionalidade / Naturalidade-UF / RG-Órgão-Expedição
         [
-            celula_campo("Data de Nascimento", dt_nasc),
-            celula_campo("Nacionalidade", nacionalidade),
-            celula_campo("Naturalidade / UF", f"{naturalidade} / {uf}".strip(" /")),
-            celula_campo("RG / Órgão / Expedição", doc_rg_str),
+            _celula_campo("Data de Nascimento", dt_nasc),
+            _celula_campo("Nacionalidade", nacionalidade),
+            _celula_campo("Naturalidade / UF", f"{naturalidade} / {uf}".strip(" /")),
+            _celula_campo("RG / Órgão / Expedição", doc_rg_str),
         ],
     ]
 
-    tabela_dados = Table(
-        dados_estudante_grid,
-        colWidths=[130, 184, 140, 100],
-        hAlign="LEFT"
-    )
-
+    tabela_dados = Table(dados_estudante_grid,
+                         colWidths=[130, 184, 140, 100], hAlign="LEFT")
     tabela_dados.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.4, CINZA_LINHA),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
     ]))
-
     story.append(tabela_dados)
 
     # ------------------------------------------------------------------
-    # BASE LEGAL (Linha Integrada de Largura Total: 554 pt)
+    # Base legal
     # ------------------------------------------------------------------
-    celula_base_legal = [
-        Paragraph("Base Legal", estilo_label),
-        Paragraph(base_legal_texto, estilo_valor)
-    ]
-    
     tabela_base_legal = Table(
-        [[celula_base_legal]],
-        colWidths=[554],
-        hAlign="LEFT"
+        [[[Paragraph("Base Legal", STYLES["label"]),
+           Paragraph(base_legal_texto, STYLES["valor"])]]],
+        colWidths=[LARGURA_UTIL],
+        hAlign="LEFT",
     )
     tabela_base_legal.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.4, CINZA_LINHA),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FAFAFA")),
+        ("BACKGROUND", (0, 0), (-1, -1), CINZA_ZEBRA),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING",   (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
     ]))
-
     story.append(tabela_base_legal)
     story.append(Spacer(1, 4))
 
     # ------------------------------------------------------------------
-    # HISTÓRICO ACADÊMICO (Soma exata: 314 + 50 + 35 + 55 + 40 + 60 = 554 pt)
+    # Histórico acadêmico
     # ------------------------------------------------------------------
-    header_hist = [
-        Paragraph("Componente Curricular", estilo_th),
-        Paragraph("Semestre", estilo_th),
-        Paragraph("CH", estilo_th),
-        Paragraph("Módulo", estilo_th),
-        Paragraph("Faltas", estilo_th),
-        Paragraph("Resultado", estilo_th),
-    ]
-
-    tabela_hist_dados = [header_hist]
+    tabela_hist_dados = [[
+        Paragraph("Componente Curricular", STYLES["th"]),
+        Paragraph("Semestre", STYLES["th"]),
+        Paragraph("CH", STYLES["th"]),
+        Paragraph("Módulo", STYLES["th"]),
+        Paragraph("Faltas", STYLES["th"]),
+        Paragraph("Resultado", STYLES["th"]),
+    ]]
 
     if df_historico is not None and not df_historico.empty:
         for _, row in df_historico.iterrows():
-            comp = str(
-                row.get(
-                    "unidade_curricular",
-                    row.get("componente", row.get("disciplina", "---"))
-                )
-            )
-            
             sem = str(row.get("semestre", "")).strip()
-            
-            if not sem or sem.lower() in ("none", "nan", ""):
-                sem = ""
-                ch = ""
-                mod = ""
-                faltas = ""
-                res = ""
-            else:
-                ch = str(row.get("carga_horaria", row.get("ch", "")))
-                mod = str(row.get("modulo", ""))
-                faltas = str(row.get("faltas", "0"))
-                res = str(row.get("resultado", row.get("conceito", "")))
+            if not sem or sem.lower() in VALORES_INVALIDOS:
+                # Linha "sem dados": mostra apenas o componente
+                comp = _row_get(row, _COLUNAS_HISTORICO["componente"], "---")
+                tabela_hist_dados.append([
+                    Paragraph(str(comp), STYLES["td_left"]),
+                    *[Paragraph("", STYLES["td"]) for _ in range(5)],
+                ])
+                continue
+
+            comp    = _row_get(row, _COLUNAS_HISTORICO["componente"], "---")
+            ch      = _row_get(row, _COLUNAS_HISTORICO["ch"], "")
+            modulo  = row.get("modulo", "")
+            faltas  = row.get("faltas", "0")
+            res     = _row_get(row, _COLUNAS_HISTORICO["resultado"], "")
 
             tabela_hist_dados.append([
-                Paragraph(comp, estilo_td_left),
-                Paragraph(sem, estilo_td),
-                Paragraph(ch, estilo_td),
-                Paragraph(mod, estilo_td),
-                Paragraph(faltas, estilo_td),
-                Paragraph(res, estilo_td),
+                Paragraph(str(comp), STYLES["td_left"]),
+                Paragraph(sem, STYLES["td"]),
+                Paragraph(str(ch), STYLES["td"]),
+                Paragraph(str(modulo), STYLES["td"]),
+                Paragraph(str(faltas), STYLES["td"]),
+                Paragraph(str(res), STYLES["td"]),
             ])
 
-    t_hist = Table(
-        tabela_hist_dados,
-        repeatRows=1,
-        colWidths=[314, 50, 35, 55, 40, 60],
-        hAlign="LEFT"
-    )
+    t_hist = Table(tabela_hist_dados, repeatRows=1,
+                   colWidths=[314, 50, 35, 55, 40, 60], hAlign="LEFT")
 
     estilo_hist = [
         ("BACKGROUND", (0, 0), (-1, 0), CINZA_CAB),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.7, CINZA_LINHA),
-        ("GRID", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW",  (0, 0), (-1, 0), 0.7, CINZA_LINHA),
+        ("GRID",       (0, 0), (-1, -1), 0.35, CINZA_LINHA),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ("TOPPADDING",   (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 2.5),
     ]
-
-    for i in range(1, len(tabela_hist_dados)):
-        if i % 2 == 0:
-            estilo_hist.append(
-                ("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FAFAFA"))
-            )
-
+    estilo_hist.extend(
+        ("BACKGROUND", (0, i), (-1, i), CINZA_ZEBRA)
+        for i in range(2, len(tabela_hist_dados), 2)
+    )
     t_hist.setStyle(TableStyle(estilo_hist))
     story.append(t_hist)
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # BLOCO FINAL (Legenda, Data e Assinaturas)
+    # Bloco final
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
             Paragraph(
                 "<b>Legenda:</b> AP = Apto; AE = Aproveitamento de Estudos; "
                 "NA = Não Apto; TR = Trancamento de Curso; D = Desistente",
-                estilo_rodape
-            ),
-            Paragraph("<b>T. Teoria:</b> 1.366 h", estilo_rodape),
-            Paragraph("<b>T. Prática:</b> 0 h", estilo_rodape),
+                STYLES["rodape"]),
+            Paragraph("<b>T. Teoria:</b> 1.366 h", STYLES["rodape"]),
+            Paragraph("<b>T. Prática:</b> 0 h", STYLES["rodape"]),
         ]],
         colWidths=[350, 102, 102],
-        hAlign="LEFT"
+        hAlign="LEFT",
     )
-
     rodape_legenda.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F7F8F8")),
-        ("BOX", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("BACKGROUND", (0, 0), (-1, -1), CINZA_RODAPE),
+        ("BOX",        (0, 0), (-1, -1), 0.35, CINZA_LINHA),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING",   (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
     ]))
 
-    data_documento = "PLANALTINA-DF, 27 DE SETEMBRO DE 2026"
     data_tabela = Table(
-        [[Paragraph(data_documento, estilo_assinatura)]],
-        colWidths=[554],
-        hAlign="LEFT"
+        [[Paragraph("PLANALTINA-DF, 27 DE SETEMBRO DE 2026", STYLES["assinatura"])]],
+        colWidths=[LARGURA_UTIL],
+        hAlign="LEFT",
     )
     data_tabela.setStyle(TableStyle([
         ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
     assinatura = Table(
         [[
-            Paragraph(
-                "____________________________________________<br/>"
-                "<b>Diretor(a)</b>",
-                estilo_assinatura
-            ),
-            Paragraph(
-                "____________________________________________<br/>"
-                "<b>Chefe de Secretaria Escolar</b>",
-                estilo_assinatura
-            ),
+            Paragraph("____________________________________________<br/><b>Diretor(a)</b>",
+                      STYLES["assinatura"]),
+            Paragraph("____________________________________________<br/><b>Chefe de Secretaria Escolar</b>",
+                      STYLES["assinatura"]),
         ]],
         colWidths=[277, 277],
         rowHeights=[43],
-        hAlign="LEFT"
+        hAlign="LEFT",
     )
-
     assinatura.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING",   (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
     ]))
 
-    bloco_final = KeepTogether([
+    story.append(KeepTogether([
         rodape_legenda,
         Spacer(1, 8),
         data_tabela,
         Spacer(1, 20),
-        assinatura
-    ])
-
-    story.append(bloco_final)
+        assinatura,
+    ]))
 
     # ------------------------------------------------------------------
-    # RODAPÉ DE PÁGINA (CANVAS)
+    # Rodapé de página
     # ------------------------------------------------------------------
-    def desenhar_rodape(canvas, doc):
+    def desenhar_rodape(canvas, doc_):
         canvas.saveState()
-        largura, altura = A4
-
+        largura, _ = A4
         canvas.setStrokeColor(CINZA_LINHA)
         canvas.setLineWidth(0.4)
-        canvas.line(
-            doc.leftMargin,
-            18,
-            largura - doc.rightMargin,
-            18
-        )
+        canvas.line(doc_.leftMargin, 18, largura - doc_.rightMargin, 18)
 
         canvas.setFont("Helvetica", 6)
         canvas.setFillColor(CINZA_MEDIO)
-        canvas.drawString(
-            doc.leftMargin,
-            9,
-            "Centro de Educação Profissional Escola Técnica de Planaltina"
-        )
-
-        canvas.drawRightString(
-            largura - doc.rightMargin,
-            9,
-            f"Página {doc.page}"
-        )
-
+        canvas.drawString(doc_.leftMargin, 9,
+                          "Centro de Educação Profissional Escola Técnica de Planaltina")
+        canvas.drawRightString(largura - doc_.rightMargin, 9, f"Página {doc_.page}")
         canvas.restoreState()
 
-    # GERAÇÃO DO PDF
-    doc.build(
-        story,
-        onFirstPage=desenhar_rodape,
-        onLaterPages=desenhar_rodape
-    )
+    doc.build(story, onFirstPage=desenhar_rodape, onLaterPages=desenhar_rodape)
 
     buffer.seek(0)
     return buffer.getvalue()
+
+
+# ----------------------------------------------------------------------
+# Auxiliar: leitura tolerante de colunas alternativas
+# ----------------------------------------------------------------------
+def _row_get(row, chaves, padrao=""):
+    for chave in chaves:
+        v = row.get(chave)
+        if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
+            return v
+    return padrao
 
 
 
