@@ -1,10 +1,12 @@
 import io
 import os
+import re
 import pandas as pd
 
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    Image, KeepTogether, PageBreak
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -14,9 +16,9 @@ from modulos.conexao import executar_query
 
 
 # ======================================================================
-# CONSTANTES GLOBAIS (evitam recriação a cada chamada)
+# CONSTANTES GLOBAIS
 # ======================================================================
-LARGURA_UTIL = 554.0
+LARGURA_UTIL   = 554.0
 MARGEM_LATERAL = 20.6
 
 CINZA_TEXTO  = colors.HexColor("#263238")
@@ -33,6 +35,9 @@ BASE_LEGAL_PADRAO = (
 )
 
 CURSO_PADRAO = "CURSO TÉCNICO EM NUTRIÇÃO E DIETÉTICA"
+
+DATA_DOCUMENTO = "PLANALTINA-DF, 27 DE SETEMBRO DE 2026"
+
 VALORES_INVALIDOS = {"", "nan", "none", "null"}
 
 _COLUNAS_HISTORICO = {
@@ -41,9 +46,12 @@ _COLUNAS_HISTORICO = {
     "resultado":  ("resultado", "conceito"),
 }
 
+_REGEX_COMP = re.compile(r"compet[êe]ncias?\s*:?", re.IGNORECASE)
+_REGEX_HAB  = re.compile(r"habilidades?\s*:?",        re.IGNORECASE)
+
 
 # ======================================================================
-# ESTILOS (criados uma única vez em nível de módulo)
+# ESTILOS (criados UMA vez no import)
 # ======================================================================
 def _build_styles():
     base = getSampleStyleSheet()
@@ -87,7 +95,20 @@ def _build_styles():
         "assinatura": _p("Assinatura", base["Normal"],
                          fontName="Helvetica", fontSize=7, leading=8,
                          alignment=TA_CENTER, textColor=PRETO),
+        # --- página 2 ---
+        "secao_titulo": _p("SecaoTitulo", base["Normal"],
+                           fontName="Helvetica-Bold", fontSize=8, leading=10,
+                           alignment=TA_LEFT, textColor=PRETO,
+                           spaceBefore=2, spaceAfter=3),
+        "secao_texto": _p("SecaoTexto", base["Normal"],
+                          fontName="Helvetica", fontSize=7, leading=9,
+                          alignment=TA_LEFT, textColor=CINZA_TEXTO,
+                          leftIndent=6, spaceAfter=1),
+        "certificacao": _p("Certificacao", base["Normal"],
+                           fontName="Helvetica", fontSize=7.2, leading=9.5,
+                           alignment=TA_LEFT, textColor=PRETO),
     }
+
 
 STYLES = _build_styles()
 
@@ -96,7 +117,6 @@ STYLES = _build_styles()
 # HELPERS
 # ======================================================================
 def _valor(d, *chaves, padrao=""):
-    """Retorna o primeiro valor válido entre as chaves fornecidas."""
     for chave in chaves:
         v = d.get(chave)
         if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
@@ -104,27 +124,44 @@ def _valor(d, *chaves, padrao=""):
     return padrao
 
 
+def _row_get(row, chaves, padrao=""):
+    for chave in chaves:
+        v = row.get(chave)
+        if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
+            return v
+    return padrao
+
+
 def _buscar_base_legal(sigla, turma):
-    """Consulta a base legal; retorna o padrão em caso de falha."""
+    """
+    Retorna (base_legal, competencias_habilidades).
+    Faz fallback para BASE_LEGAL_PADRAO / '' em caso de erro.
+    """
     if not (sigla and turma):
-        return BASE_LEGAL_PADRAO
+        return BASE_LEGAL_PADRAO, ""
+
     try:
         df = executar_query(
-            "SELECT base_legal FROM TB_BASE_LEGAL WHERE sigla = %s AND turma = %s",
+            """SELECT base_legal, competencias_habilidades
+               FROM TB_BASE_LEGAL
+               WHERE sigla = %s AND turma = %s""",
             params=(sigla, turma),
         )
         if not df.empty:
-            texto = df.iloc[0]["base_legal"]
-            if pd.notnull(texto) and str(texto).strip():
-                return str(texto).strip()
+            linha = df.iloc[0]
+            bl  = linha.get("base_legal")
+            ch  = linha.get("competencias_habilidades")
+
+            bl = str(bl).strip() if pd.notnull(bl) and str(bl).strip() else BASE_LEGAL_PADRAO
+            ch = str(ch).strip() if pd.notnull(ch) else ""
+            return bl, ch
     except Exception as exc:
-        # Log em vez de silenciar completamente
         print(f"[gerar_pdf_historico_aluno] Falha ao buscar base legal: {exc}")
-    return BASE_LEGAL_PADRAO
+
+    return BASE_LEGAL_PADRAO, ""
 
 
 def _carregar_logo(path, width=38, height=38):
-    """Carrega a imagem se existir; caso contrário, devolve Paragraph vazio."""
     if os.path.exists(path):
         return Image(path, width=width, height=height)
     return Paragraph("", STYLES["valor"])
@@ -137,11 +174,129 @@ def _celula_campo(rotulo, valor_txt, negrito=False):
     ]
 
 
+def _separar_competencias(texto):
+    """
+    Divide o texto bruto em (bloco_competencias, bloco_habilidades).
+    Detecta marcadores 'COMPETÊNCIAS:' e 'HABILIDADES:' com ou sem acento.
+    """
+    texto = (texto or "").replace("\r\n", "\n").strip()
+    if not texto:
+        return "", ""
+
+    m_comp = _REGEX_COMP.search(texto)
+    m_hab  = _REGEX_HAB.search(texto)
+
+    if m_comp and m_hab and m_hab.start() > m_comp.start():
+        return (texto[m_comp.end():m_hab.start()].strip(),
+                texto[m_hab.end():].strip())
+    if m_comp:
+        return texto[m_comp.end():].strip(), ""
+    if m_hab:
+        return "", texto[m_hab.end():].strip()
+
+    # Sem marcadores → tudo vai para competências
+    return texto, ""
+
+
+# ======================================================================
+# MONTAGEM — PÁGINA 2
+# ======================================================================
+def _montar_segunda_pagina(competencias_txt, nome, curso, matricula, data_doc):
+    story = []
+    bloco_comp, bloco_hab = _separar_competencias(competencias_txt)
+
+    # --- COMPETÊNCIAS ---
+    story.append(Paragraph("<b>COMPETÊNCIAS:</b>", STYLES["secao_titulo"]))
+    if bloco_comp:
+        for linha in filter(None, (l.strip() for l in bloco_comp.split("\n"))):
+            story.append(Paragraph(f"• {linha}", STYLES["secao_texto"]))
+    else:
+        story.append(Paragraph("—", STYLES["secao_texto"]))
+    story.append(Spacer(1, 6))
+
+    # --- HABILIDADES ---
+    story.append(Paragraph("<b>HABILIDADES:</b>", STYLES["secao_titulo"]))
+    if bloco_hab:
+        for linha in filter(None, (l.strip() for l in bloco_hab.split("\n"))):
+            story.append(Paragraph(f"• {linha}", STYLES["secao_texto"]))
+    else:
+        story.append(Paragraph("—", STYLES["secao_texto"]))
+    story.append(Spacer(1, 14))
+
+    # --- Caixa de certificação ---
+    texto_cert = (
+        f"O <b>Centro de Educação Profissional – Escola Técnica de Planaltina</b>, "
+        f"no uso de suas atribuições, certifica que o(a) aluno(a) "
+        f"<b>{nome or '—'}</b>, matrícula nº <b>{matricula or '—'}</b>, "
+        f"concluiu o <b>{curso or '—'}</b>, com carga horária total de "
+        f"<b>1.366 horas</b> (T. Teoria: 1.366 h / T. Prática: 0 h), "
+        f"tendo sido considerado(a) <b>APTO(A)</b> em todos os componentes "
+        f"curriculares, conforme a legislação vigente."
+    )
+
+    tabela_cert = Table(
+        [[Paragraph(texto_cert, STYLES["certificacao"])]],
+        colWidths=[LARGURA_UTIL],
+        hAlign="LEFT",
+    )
+    tabela_cert.setStyle(TableStyle([
+        ("BOX",        (0, 0), (-1, -1), 0.4, CINZA_LINHA),
+        ("BACKGROUND", (0, 0), (-1, -1), CINZA_ZEBRA),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING",   (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 5),
+    ]))
+
+    story.append(tabela_cert)
+    story.append(Spacer(1, 10))
+
+    # --- Cidade / Data ---
+    data_tabela = Table(
+        [[Paragraph(data_doc, STYLES["assinatura"])]],
+        colWidths=[LARGURA_UTIL],
+        hAlign="LEFT",
+    )
+    data_tabela.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    story.append(data_tabela)
+
+    # --- Assinaturas (Diretor / Secretária Escolar) ---
+    story.append(Spacer(1, 40))
+    assinatura2 = Table(
+        [[
+            Paragraph("____________________________________________<br/><b>DIRETOR</b>",
+                      STYLES["assinatura"]),
+            Paragraph("____________________________________________<br/><b>SECRETÁRIA ESCOLAR</b>",
+                      STYLES["assinatura"]),
+        ]],
+        colWidths=[277, 277],
+        rowHeights=[43],
+        hAlign="LEFT",
+    )
+    assinatura2.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING",   (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
+    ]))
+
+    story.append(assinatura2)
+    return story
+
+
 # ======================================================================
 # FUNÇÃO PRINCIPAL
 # ======================================================================
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """Gera o Histórico Escolar em A4."""
+    """Gera o Histórico Escolar em 2 páginas A4."""
 
     # Compatibilidade com chamada invertida
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
@@ -170,32 +325,32 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     else:
         d = {}
 
-    sigla  = _valor(d, "sigla")
-    turma  = _valor(d, "turma")
-    curso  = _valor(d, "curso", padrao=CURSO_PADRAO).upper()
-    nome   = _valor(d, "nome").upper()
-    cpf    = _valor(d, "cpf")
-    sexo   = _valor(d, "sexo").upper()
-    mae    = _valor(d, "mae", "nome_mae").upper()
-    pai    = _valor(d, "pai", "nome_pai").upper()
-    dt_nasc = _valor(d, "data_nascimento")
+    sigla     = _valor(d, "sigla")
+    turma     = _valor(d, "turma")
+    curso     = _valor(d, "curso", padrao=CURSO_PADRAO).upper()
+    nome      = _valor(d, "nome").upper()
+    cpf       = _valor(d, "cpf")
+    sexo      = _valor(d, "sexo").upper()
+    mae       = _valor(d, "mae", "nome_mae").upper()
+    pai       = _valor(d, "pai", "nome_pai").upper()
+    dt_nasc   = _valor(d, "data_nascimento")
     matricula = _valor(d, "matricula", "matrícula")
 
     nacionalidade = (_valor(d, "nacionalidade", padrao="BRASILEIRA")
                      .upper().replace(" ", "")) or "BRASILEIRA"
 
     naturalidade = _valor(d, "naturalidade").upper()
-    uf = _valor(d, "uf", padrao="DF").upper()
+    uf           = _valor(d, "uf", padrao="DF").upper()
 
     rg     = _valor(d, "rg")
     orgao  = _valor(d, "orgao_expeditor", "orgao").upper()
     dt_exp = _valor(d, "data_expedicao")
     doc_rg_str = " - ".join(x for x in (rg, orgao, dt_exp) if x) or "—"
 
-    base_legal_texto = _buscar_base_legal(sigla, turma)
+    base_legal_texto, competencias_habilidades = _buscar_base_legal(sigla, turma)
 
     # ------------------------------------------------------------------
-    # Cabeçalho
+    # PÁGINA 1 — Cabeçalho
     # ------------------------------------------------------------------
     texto_institucional = [
         Paragraph("GOVERNO DO DISTRITO FEDERAL", STYLES["institucional_bold"]),
@@ -207,7 +362,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     ]
 
     cabecalho = Table(
-        [[_carregar_logo("logo_gdf.png"), texto_institucional, _carregar_logo("logo_escola.png")]],
+        [[_carregar_logo("logo_gdf.png"),
+          texto_institucional,
+          _carregar_logo("logo_escola.png")]],
         colWidths=[45, 464, 45],
         rowHeights=[45],
         hAlign="LEFT",
@@ -225,7 +382,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     ]
 
     # ------------------------------------------------------------------
-    # Grelha de dados do estudante
+    # Grade de dados do estudante
     # ------------------------------------------------------------------
     dados_estudante_grid = [
         [
@@ -296,20 +453,19 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     if df_historico is not None and not df_historico.empty:
         for _, row in df_historico.iterrows():
             sem = str(row.get("semestre", "")).strip()
+            comp = _row_get(row, _COLUNAS_HISTORICO["componente"], "---")
+
             if not sem or sem.lower() in VALORES_INVALIDOS:
-                # Linha "sem dados": mostra apenas o componente
-                comp = _row_get(row, _COLUNAS_HISTORICO["componente"], "---")
                 tabela_hist_dados.append([
                     Paragraph(str(comp), STYLES["td_left"]),
                     *[Paragraph("", STYLES["td"]) for _ in range(5)],
                 ])
                 continue
 
-            comp    = _row_get(row, _COLUNAS_HISTORICO["componente"], "---")
-            ch      = _row_get(row, _COLUNAS_HISTORICO["ch"], "")
-            modulo  = row.get("modulo", "")
-            faltas  = row.get("faltas", "0")
-            res     = _row_get(row, _COLUNAS_HISTORICO["resultado"], "")
+            ch     = _row_get(row, _COLUNAS_HISTORICO["ch"], "")
+            modulo = row.get("modulo", "")
+            faltas = row.get("faltas", "0")
+            res    = _row_get(row, _COLUNAS_HISTORICO["resultado"], "")
 
             tabela_hist_dados.append([
                 Paragraph(str(comp), STYLES["td_left"]),
@@ -342,7 +498,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # Bloco final
+    # Bloco final da página 1
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
@@ -367,7 +523,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     ]))
 
     data_tabela = Table(
-        [[Paragraph("PLANALTINA-DF, 27 DE SETEMBRO DE 2026", STYLES["assinatura"])]],
+        [[Paragraph(DATA_DOCUMENTO, STYLES["assinatura"])]],
         colWidths=[LARGURA_UTIL],
         hAlign="LEFT",
     )
@@ -408,7 +564,21 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     ]))
 
     # ------------------------------------------------------------------
-    # Rodapé de página
+    # PÁGINA 2 — Competências, Habilidades, Certificação e Assinaturas
+    # ------------------------------------------------------------------
+    story.append(PageBreak())
+    story.extend(
+        _montar_segunda_pagina(
+            competencias_txt=competencias_habilidades,
+            nome=nome,
+            curso=curso,
+            matricula=matricula,
+            data_doc=DATA_DOCUMENTO,
+        )
+    )
+
+    # ------------------------------------------------------------------
+    # Rodapé de página (canvas)
     # ------------------------------------------------------------------
     def desenhar_rodape(canvas, doc_):
         canvas.saveState()
@@ -424,21 +594,13 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         canvas.drawRightString(largura - doc_.rightMargin, 9, f"Página {doc_.page}")
         canvas.restoreState()
 
+    # ------------------------------------------------------------------
+    # Geração do PDF
+    # ------------------------------------------------------------------
     doc.build(story, onFirstPage=desenhar_rodape, onLaterPages=desenhar_rodape)
 
     buffer.seek(0)
     return buffer.getvalue()
-
-
-# ----------------------------------------------------------------------
-# Auxiliar: leitura tolerante de colunas alternativas
-# ----------------------------------------------------------------------
-def _row_get(row, chaves, padrao=""):
-    for chave in chaves:
-        v = row.get(chave)
-        if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
-            return v
-    return padrao
 
 
 
