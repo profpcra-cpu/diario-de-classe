@@ -7,7 +7,9 @@ from modulos.pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
-    gerar_pdf_passes_turma_unificado,  # <--- Importado a função que une todos os passes num único PDF
+    gerar_pdf_passes_turma_unificado,
+    # Se tiver uma função específica para conclusão, importe-a aqui também:
+    # gerar_pdf_declaracao_conclusao, 
 )
 
 
@@ -16,7 +18,7 @@ def renderizar_modulo_secretaria():
         "🎓 Secretaria Escolar - Motor de Ficha Académica e Documentos"
     )
     st.markdown(
-        "Selecione o estudante para consultar a ficha cadastral unificada, histórico curricular e emitir documentos oficiais."
+        "Selecione o estudante, escolha o tipo de documento, efetue edições pontuais se necessário e emita a documentação oficial."
     )
 
     try:
@@ -52,7 +54,7 @@ def renderizar_modulo_secretaria():
                 aba_ficha, aba_historico = st.tabs(
                     [
                         "📄 Ficha Cadastral (Dados Pessoais)",
-                        "📚 Histórico e Emissão de Documentos",
+                        "📚 Histórico, Edição e Emissão de Documentos",
                     ]
                 )
 
@@ -87,7 +89,7 @@ def renderizar_modulo_secretaria():
                                 )
 
                         if st.form_submit_button(
-                            "💾 Guardar Alterações Cadastrais"
+                            "💾 Guardar Alterações Cadastrais na Base de Dados"
                         ):
                             try:
                                 set_clauses = ", ".join(
@@ -110,24 +112,17 @@ def renderizar_modulo_secretaria():
                                 )
 
                 # -------------------------------------------------------------
-                # ABA 2: HISTÓRICO E EMISSÃO DE DOCUMENTOS
+                # ABA 2: HISTÓRICO, EDIÇÃO PRÉ-IMPRESSÃO E EMISSÃO
                 # -------------------------------------------------------------
                 with aba_historico:
-                    st.markdown(
-                        "### Histórico Curricular e Notas Associadas (TB_DIARIO)"
-                    )
+                    st.markdown("### Histórico Curricular e Notas Associadas")
                     df_historico_aluno = executar_query(
                         "SELECT * FROM TB_DIARIO WHERE matricula = %s",
                         params=(matricula_busca,),
                     )
 
-                    if (
-                        df_historico_aluno is None
-                        or df_historico_aluno.empty
-                    ):
-                        st.info(
-                            "Não existem registos curriculares na TB_DIARIO para este aluno."
-                        )
+                    if df_historico_aluno is None or df_historico_aluno.empty:
+                        st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
                         df_historico_editado = pd.DataFrame()
                     else:
                         df_historico_editado = st.data_editor(
@@ -139,10 +134,7 @@ def renderizar_modulo_secretaria():
                         if st.button("💾 Guardar Alterações do Histórico"):
                             try:
                                 atualizados_hist = 0
-                                for (
-                                    _,
-                                    row,
-                                ) in df_historico_editado.iterrows():
+                                for _, row in df_historico_editado.iterrows():
                                     mat = row.get("matricula")
                                     iduc_val = row.get("iduc")
 
@@ -165,77 +157,115 @@ def renderizar_modulo_secretaria():
                                             fetch=False,
                                         )
                                         atualizados_hist += 1
-                                st.success(
-                                    f"Sucesso! {atualizados_hist} registos guardados."
-                                )
+                                st.success(f"Sucesso! {atualizados_hist} registos guardados.")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Erro ao guardar histórico: {e}")
 
                     st.markdown("---")
-                    st.markdown(
-                        "### 🖨️ Central de Emissão de Documentos Académicos"
+                    st.markdown("### 📝 Editor Personalizado de Documentos (Pré-Impressão)")
+                    st.info("Selecione o tipo de documento e ajuste os campos que deseja modificar antes de gerar o ficheiro final PDF.")
+
+                    # Seleção do documento que deseja ajustar e emitir
+                    tipo_documento = st.selectbox(
+                        "Selecione o Documento a Emitir:",
+                        [
+                            "Declaração de Escolaridade", 
+                            "Passe Estudantil", 
+                            "Declaração de Conclusão", 
+                            "Histórico Escolar Oficial"
+                        ]
                     )
 
-                    dados_dict = df_dados_pessoais.iloc[0].to_dict()
-                    df_para_pdf = (
-                        df_historico_editado
-                        if not df_historico_editado.empty
-                        else df_historico_aluno
-                    )
+                    dados_originais = df_dados_pessoais.iloc[0].to_dict()
 
-                    # Emissão Individual de Documentos
-                    col_doc1, col_doc2, col_doc3 = st.columns(3)
+                    # Formulário de Edição Dinâmica dos Campos do Documento
+                    with st.form(key=f"form_edicao_doc_{matricula_busca}"):
+                        st.markdown(f"**A ajustar dados para:** {tipo_documento}")
+                        
+                        col_ed1, col_ed2 = st.columns(2)
+                        with col_ed1:
+                            edit_nome = st.text_input("Nome Completo:", value=str(dados_originais.get("nome", "")))
+                            edit_curso = st.text_input("Curso:", value=str(dados_originais.get("curso", "TÉCNICO EM ENFERMAGEM")))
+                            edit_turma = st.text_input("Turma / Turno:", value=str(dados_originais.get("turma", "")))
+                            edit_rg = st.text_input("Identidade (RG):", value=str(dados_originais.get("identidade", "")))
+                        
+                        with col_ed2:
+                            edit_cpf = st.text_input("CPF:", value=str(dados_originais.get("cpf", "")))
+                            edit_nasc = st.text_input("Data de Nascimento:", value=str(dados_originais.get("data_nascimento", "")))
+                            edit_sexo = st.text_input("Sexo:", value=str(dados_originais.get("sexo", "")))
+                            edit_data_emissao = st.text_input("Data do Documento:", value="29/09/2026")
 
-                    with col_doc1:
-                        pdf_dec_bytes = gerar_pdf_declaracao_escolaridade(
-                            dados_dict
+                        # Campo de texto customizado para observações ou corpo principal (ex: Carga horária total ou texto de conclusão)
+                        edit_observacao = st.text_area(
+                            "Texto / Observações / Carga Horária Específica:",
+                            value=f"O(a) aluno(a) acima supracitado(a) concluiu o referido curso, sendo a carga horária total de horas."
                         )
+
+                        botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
+
+                    # Ação executada após submeter o formulário de edição
+                    if botao_gerar_editado:
+                        # Criar dicionário consolidado com as alterações feitas pelo utilizador
+                        dados_customizados = dados_originais.copy()
+                        dados_customizados["nome"] = edit_nome
+                        dados_customizados["curso"] = edit_curso
+                        dados_customizados["turma"] = edit_turma
+                        dados_customizados["identidade"] = edit_rg
+                        dados_customizados["cpf"] = edit_cpf
+                        dados_customizados["data_nascimento"] = edit_nasc
+                        dados_customizados["sexo"] = edit_sexo
+                        dados_customizados["data_emissao"] = edit_data_emissao
+                        dados_customizados["observacao"] = edit_observacao
+
+                        df_para_pdf = (
+                            df_historico_editado
+                            if not df_historico_editado.empty
+                            else df_historico_aluno
+                        )
+
+                        # Direciona para a função de PDF correspondente utilizando os dados ajustados
+                        if tipo_documento == "Declaração de Escolaridade":
+                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
+                            nome_ficheiro = f"declaracao_escolaridade_{matricula_busca}.pdf"
+
+                        elif tipo_documento == "Passe Estudantil":
+                            pdf_bytes_gerado = gerar_pdf_passe_estudantil(dados_customizados)
+                            nome_ficheiro = f"passe_estudantil_{matricula_busca}.pdf"
+
+                        elif tipo_documento == "Declaração de Conclusão":
+                            # Se tiveres a função de conclusão criada, chame-a aqui. 
+                            # Exemplo: pdf_bytes_gerado = gerar_pdf_declaracao_conclusao(dados_customizados)
+                            # Caso contrário, pode usar provisoriamente uma base ou adaptar:
+                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados) 
+                            nome_ficheiro = f"declaracao_conclusao_{matricula_busca}.pdf"
+
+                        else:  # Histórico Escolar Oficial
+                            pdf_bytes_gerado = gerar_pdf_historico_aluno(df_para_pdf, dados_customizados)
+                            nome_ficheiro = f"historico_oficial_{matricula_busca}.pdf"
+
+                        st.success(f"Documento '{tipo_documento}' gerado com sucesso com base nas edições efetuadas!")
+                        
                         st.download_button(
-                            label="📜 Descarregar Declaração de Escolaridade (PDF)",
-                            data=pdf_dec_bytes,
-                            file_name=f"declaracao_{matricula_busca}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True,
-                        )
-
-                    with col_doc2:
-                        pdf_passe_bytes = gerar_pdf_passe_estudantil(
-                            dados_dict
-                        )
-                        st.download_button(
-                            label="🚌 Descarregar Passe Estudantil (PDF)",
-                            data=pdf_passe_bytes,
-                            file_name=f"passe_estudantil_{matricula_busca}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True,
-                        )
-
-                    with col_doc3:
-                        pdf_hist_bytes = gerar_pdf_historico_aluno(
-                            df_para_pdf, dados_dict
-                        )
-                        st.download_button(
-                            label="🎓 Descarregar Histórico Escolar Oficial (PDF)",
-                            data=pdf_hist_bytes,
-                            file_name=f"historico_{matricula_busca}.pdf",
+                            label=f"📥 Descarregar {tipo_documento} (PDF)",
+                            data=pdf_bytes_gerado,
+                            file_name=nome_ficheiro,
                             mime="application/pdf",
                             use_container_width=True,
                         )
 
                     # ---------------------------------------------------------
-                    # EMISSÃO UNIFICADA POR TURMA (TODOS OS PASSES NUM SÓ PDF)
+                    # EMISSÃO UNIFICADA EM LOTE (POR TURMA)
                     # ---------------------------------------------------------
                     st.markdown("---")
-                    st.markdown("### 📚 Emissão Unificada em Lote (Passe Estudantil por Turma)")
+                    st.markdown("### 📚 Emissão Unificada em Lote (Turma Inteira)")
                     
-                    turma_atual = dados_dict.get("turma")
+                    turma_atual = dados_originais.get("turma")
                     if turma_atual:
                         st.info(f"Turma detetada para emissão unificada: **{turma_atual}**")
                         
-                        if st.button("🚀 Gerar PDF Único com Todos os Passes da Turma", use_container_width=True):
-                            with st.spinner("A consolidar os documentos de todos os alunos num único PDF... Por favor, aguarde."):
-                                # Busca todos os registos da turma na base de dados
+                        if st.button("🚀 Gerar PDF Único com Passes de Toda a Turma", use_container_width=True):
+                            with st.spinner("A consolidar os documentos de todos os alunos num único PDF..."):
                                 df_turma = executar_query(
                                     "SELECT * FROM TB_PESSOAS WHERE turma = %s",
                                     params=(turma_atual,)
@@ -246,7 +276,7 @@ def renderizar_modulo_secretaria():
                                     st.success(f"PDF unificado gerado com sucesso! {len(df_turma)} alunos incluídos.")
                                     
                                     st.download_button(
-                                        label=f"📥 Clique aqui para descarregar o PDF Único da Turma {turma_atual}",
+                                        label=f"📥 Descarregar PDF Único da Turma {turma_atual}",
                                         data=pdf_unificado_bytes,
                                         file_name=f"passes_unificados_turma_{str(turma_atual).replace('/', '-')}.pdf",
                                         mime="application/pdf",
