@@ -604,6 +604,8 @@ Características:
 - 21 colunas acadêmicas por página
 - Matrícula e Estudante repetidos em todas as páginas
 - Cabeçalho institucional sóbrio com fio inferior forte
+- Unidades Curriculares mescladas horizontalmente (pares FAL/CON)
+- Inclusão do nome do Curso na seção de identificação
 - Indicadores F/C diferenciados apenas por peso e filete
 - Cabeçalho da tabela repetido automaticamente
 - Último bloco completado com colunas vazias para preservar geometria
@@ -754,7 +756,7 @@ def _estilos():
             fontName="Helvetica", fontSize=7.5, leading=8.5,
             alignment=TA_CENTER, textColor=CINZA_ESCURO
         ),
-        # --- Identificação da turma ---
+        # --- Identificação do curso/turma ---
         "label": ParagraphStyle(
             "AFINLabel", parent=base["Normal"],
             fontName="Helvetica-Bold", fontSize=6, leading=6.5,
@@ -852,13 +854,9 @@ def _topo(largura, st):
     tabela.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        # Fio superior forte
         ("LINEABOVE", (0, 0), (-1, 0), 1.2, PRETO),
-        # Fio entre SEEDF e CEP
         ("LINEBELOW", (0, 0), (-1, 0), 0.4, CINZA_FIO),
-        # Fio entre CEP e AFIN
         ("LINEBELOW", (0, 1), (-1, 1), 0.4, CINZA_FIO),
-        # Fio inferior forte
         ("LINEBELOW", (0, 2), (-1, 2), 1.2, PRETO),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
@@ -869,29 +867,38 @@ def _topo(largura, st):
 
 
 # ============================================================
-# IDENTIFICAÇÃO DA TURMA (linha simples com rótulos e valores)
+# IDENTIFICAÇÃO DA TURMA E CURSO (linha simples com rótulos e valores)
 # ============================================================
 
-def _identificacao(largura, turma, semestre, st):
-    metade = largura / 2
+def _identificacao(largura, curso, turma, semestre, st):
+    # Distribuição proporcional: Curso ~ 45%, Turma ~ 30%, Semestre ~ 25%
+    larg_curso_lbl, larg_curso_val = 14 * mm, (largura * 0.45) - 14 * mm
+    larg_turma_lbl, larg_turma_val = 14 * mm, (largura * 0.30) - 14 * mm
+    larg_sem_lbl, larg_sem_val     = 18 * mm, (largura * 0.25) - 18 * mm
+
     dados = [[
+        Paragraph("CURSO", st["label"]),
+        Paragraph(_html(curso if curso else "—"), st["valor"]),
         Paragraph("TURMA", st["label"]),
         Paragraph(_html(turma), st["valor"]),
         Paragraph("SEMESTRE", st["label"]),
         Paragraph(_html(semestre), st["valor"]),
     ]]
-    larguras = [16 * mm, metade - 16 * mm, 20 * mm, metade - 20 * mm]
+    larguras = [
+        larg_curso_lbl, larg_curso_val,
+        larg_turma_lbl, larg_turma_val,
+        larg_sem_lbl, larg_sem_val
+    ]
     tabela = Table(dados, colWidths=larguras, rowHeights=[7 * mm], hAlign="LEFT")
     tabela.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
         ("TOPPADDING", (0, 0), (-1, -1), 1),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
-        # Apenas fio inferior
         ("LINEBELOW", (0, 0), (-1, 0), 0.6, CINZA_ESCURO),
-        # Divisória vertical entre TURMA e SEMESTRE
         ("LINEAFTER", (1, 0), (1, 0), 0.4, CINZA_FIO),
+        ("LINEAFTER", (3, 0), (3, 0), 0.4, CINZA_FIO),
     ]))
     return tabela
 
@@ -941,7 +948,7 @@ def _cabecalho(bloco, mapa, wm, wn, wc, st):
 
 
 # ============================================================
-# TABELA PRINCIPAL
+# TABELA PRINCIPAL (COM MESCLAGEM DE UCs)
 # ============================================================
 
 def _tabela(df, bloco, mapa, wm, wn, wc, st):
@@ -965,20 +972,18 @@ def _tabela(df, bloco, mapa, wm, wn, wc, st):
     tabela = Table(linhas, colWidths=larguras, repeatRows=3, hAlign="LEFT")
 
     comandos = [
+        # Mesclagem vertical para Matrícula e Estudante no cabeçalho
+        ("SPAN", (0, 0), (0, 2)),
+        ("SPAN", (1, 0), (1, 2)),
+
         # --- Fios do cabeçalho ---
-        # Fio superior forte
         ("LINEABOVE", (0, 0), (-1, 0), 1.0, PRETO),
-        # Sob a linha UC
         ("LINEBELOW", (0, 0), (-1, 0), 0.3, CINZA_FIO),
-        # Sob a linha IDUC
         ("LINEBELOW", (0, 1), (-1, 1), 0.3, CINZA_FIO_SUAVE),
-        # Sob a linha indicador (fio forte que separa cabeçalho do corpo)
         ("LINEBELOW", (0, 2), (-1, 2), 1.0, PRETO),
 
         # --- Fios verticais estruturais ---
-        # Após MATRÍCULA (fio médio)
         ("LINEAFTER", (0, 0), (0, -1), 0.4, CINZA_FIO),
-        # Após ESTUDANTE (fio duplo = âncora)
         ("LINEAFTER", (1, 0), (1, -1), 0.4, CINZA_FIO),
         ("LINEAFTER", (1, 0), (1, -1), 1.0, CINZA_ESCURO),
 
@@ -994,12 +999,41 @@ def _tabela(df, bloco, mapa, wm, wn, wc, st):
         ("RIGHTPADDING", (0, 0), (-1, -1), 1.0),
     ]
 
+    # --- Lógica de mesclagem das colunas de UC (pares FAL e CON) ---
+    idx = 0
+    while idx < len(bloco):
+        col_atual = bloco[idx]
+        if col_atual is None:
+            idx += 1
+            continue
+
+        uc_atual = _nome_uc(col_atual)
+        span_len = 1
+
+        # Verifica se as colunas subsequentes pertencem à mesma UC
+        while (idx + span_len) < len(bloco):
+            col_prox = bloco[idx + span_len]
+            if col_prox is not None and _nome_uc(col_prox) == uc_atual:
+                span_len += 1
+            else:
+                break
+
+        col_inicio = 2 + idx
+        col_fim = 2 + idx + span_len - 1
+
+        if span_len > 1:
+            # Mescla as células do título da UC
+            comandos.append(("SPAN", (col_inicio, 0), (col_fim, 0)))
+            # Mescla as células do IDUC (se houver)
+            comandos.append(("SPAN", (col_inicio, 1), (col_fim, 1)))
+
+        idx += span_len
+
     # --- Fio inferior forte no final da tabela ---
     quantidade_linhas = len(linhas)
     comandos.append(("LINEBELOW", (0, quantidade_linhas - 1), (-1, quantidade_linhas - 1), 1.0, PRETO))
 
     # --- Divisão entre pares F/C ---
-    # Um fio vertical médio após cada "C" separa visualmente os pares
     for posicao, coluna in enumerate(bloco, start=2):
         if coluna is None:
             continue
@@ -1071,7 +1105,7 @@ def _preparar_dataframe(df_matriz):
     return df
 
 
-def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
+def gerar_pdf_afin(df_matriz, turma, semestre, curso="", mapa_nomes_iduc=None):
     """Gera o PDF consolidado da Matriz AFIN (modelo tradicional P&B)."""
     df = _preparar_dataframe(df_matriz)
     buffer = io.BytesIO()
@@ -1108,7 +1142,7 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
 
         story.append(_topo(largura_util, st))
         story.append(Spacer(1, 2.0 * mm))
-        story.append(_identificacao(largura_util, turma, semestre, st))
+        story.append(_identificacao(largura_util, curso, turma, semestre, st))
         story.append(Spacer(1, 2.0 * mm))
 
         if df.empty:
