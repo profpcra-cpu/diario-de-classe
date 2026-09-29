@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-from modulos.conexao import executar_query
-from modulos.pdf_generator import gerar_pdf_afin
+from .conexao import executar_query
+from .pdf_generator import gerar_pdf_afin
 
 def salvar_alteracoes_afin(df_editado):
     """
