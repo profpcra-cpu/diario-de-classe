@@ -1189,9 +1189,10 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
                 val = str(dados[chave]).strip()
                 if val and val.lower() != "none":
                     return val
-            target = chave.lower().replace(" ", "_")
+            target = chave.lower().replace(" ", "_").replace(":", "")
             for k, v in dados.items():
-                if k.lower().replace(" ", "_") == target:
+                k_clean = k.lower().replace(" ", "_").replace(":", "")
+                if k_clean == target:
                     if v is not None:
                         val = str(v).strip()
                         if val and val.lower() != "none":
@@ -1322,13 +1323,16 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
     naturalidade = get_dado(dados_aluno, "naturalidade", "cidade")
     uf = get_dado(dados_aluno, "uf", "uf_endereco") or "DF"
     rg = get_dado(dados_aluno, "rg", "identidade")
-    orgao_expeditor = get_dado(dados_aluno, "orgao_expeditor", "orgao_exp")
-    data_expedicao = get_dado(dados_aluno, "data_expedicao", "data_exp")
+    
+    # Captura correta para Órgão Expedidor e Data de Expedição com base nas chaves da imagem
+    orgao_expeditor = get_dado(dados_aluno, "org_expedidor", "orgao_expeditor", "orgao_exp")
+    data_expedicao = get_dado(dados_aluno, "dta_expedicao", "data_expedicao", "data_exp")
+    
     cpf = get_dado(dados_aluno, "cpf")
     nome_mae = get_dado(dados_aluno, "nome_mae", "nome_da_mae", "nome da mae", "mae")
     
-    # Tratamento para o nome do pai (ignora se for vazio, "não sei", "não informado", etc.)
-    raw_pai = get_dado(dados_aluno, "nome_pai", "nome_do_pai", "nome do pai", "pai")
+    # Tratamento para o nome do pai
+    raw_pai = get_dado(dados_aluno, "nome_pai", "nome_do_pai", "nome do pai", "pai", "nome do responsavel")
     ignorar_pai = ["não sei", "nao sei", "não informado", "nao informado", "não", "nao", "-"]
     if raw_pai.lower() in ignorar_pai:
         nome_pai = ""
@@ -1392,8 +1396,8 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
         ],
     ]
 
-    # Ajustado a 1ª coluna para 75 para o CPF não quebrar, reequilibrando as demais
-    col_widths = [75, 75, 70, 35, 105, 45, 59, 59]
+    # Distribuição refinada das larguras das colunas da linha 3 (Identidade, Órg. Exp., Data de Expedição)
+    col_widths = [75, 75, 70, 35, 95, 55, 64, 54]
     tabela_dados = Table(dados_grid, colWidths=col_widths)
     tabela_dados.setStyle(
         TableStyle([
