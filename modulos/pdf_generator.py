@@ -8,16 +8,15 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 from modulos.conexao import executar_query
 
 
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
-    Gera o Histórico Escolar em A4, com diagramação institucional,
-    alinhamento rigoroso de colunas (todas somando exatamente 554 pt)
-    e limpeza de campos acadêmicos quando o semestre não estiver lançado.
+    Gera o Histórico Escolar em A4, com diagramação baseada na proposta visual,
+    alinhamento rigoroso de colunas (largura útil total: 554 pt) e correção de campos.
     """
 
     # Compatibilidade com chamada invertida
@@ -28,15 +27,15 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     # ------------------------------------------------------------------
     # CONFIGURAÇÃO DO DOCUMENTO (Largura útil exata: 554 pt)
-    # A4 = 595.27 de largura. Margens de 28 pt à esquerda e direita.
+    # A4 = 595.27 de largura. Margens de 20.6 pt à esquerda e direita.
     # ------------------------------------------------------------------
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=28,
-        leftMargin=28,
-        topMargin=22,
-        bottomMargin=24,
+        rightMargin=20.6,
+        leftMargin=20.6,
+        topMargin=20,
+        bottomMargin=22,
         title="Histórico Escolar",
         author="Centro de Educação Profissional Escola Técnica de Planaltina"
     )
@@ -44,11 +43,11 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     styles = getSampleStyleSheet()
 
     # ------------------------------------------------------------------
-    # PALETA
+    # PALETA DE CORES
     # ------------------------------------------------------------------
     CINZA_TEXTO = colors.HexColor("#263238")
     CINZA_MEDIO = colors.HexColor("#5F6B72")
-    CINZA_LINHA = colors.HexColor("#C8CED2")
+    CINZA_LINHA = colors.HexColor("#A0AAB0")
     CINZA_CAB = colors.HexColor("#E7EAEC")
     PRETO = colors.HexColor("#111111")
 
@@ -59,66 +58,49 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         "Institucional",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=7.3,
-        leading=8.4,
+        fontSize=7.5,
+        leading=8.5,
         alignment=TA_CENTER,
-        textColor=PRETO,
-        spaceAfter=0,
-        spaceBefore=0
+        textColor=PRETO
     )
 
     estilo_institucional_bold = ParagraphStyle(
         "InstitucionalBold",
         parent=estilo_institucional,
         fontName="Helvetica-Bold",
-        fontSize=7.5,
-        leading=8.7
+        fontSize=7.8,
+        leading=8.8
     )
 
     estilo_titulo = ParagraphStyle(
         "TituloHistorico",
         parent=styles["Heading1"],
         fontName="Helvetica-Bold",
-        fontSize=14,
-        leading=16,
+        fontSize=12,
+        leading=14,
         alignment=TA_CENTER,
         textColor=PRETO,
-        spaceBefore=5,
-        spaceAfter=7
-    )
-
-    estilo_secao = ParagraphStyle(
-        "Secao",
-        parent=styles["Normal"],
-        fontName="Helvetica-Bold",
-        fontSize=7.4,
-        leading=8.5,
-        alignment=TA_LEFT,
-        textColor=PRETO,
-        spaceBefore=0,
-        spaceAfter=0
+        spaceBefore=3,
+        spaceAfter=3
     )
 
     estilo_label = ParagraphStyle(
         "Label",
         parent=styles["Normal"],
         fontName="Helvetica-Bold",
-        fontSize=6.2,
-        leading=7,
+        fontSize=6.0,
+        leading=6.8,
         textColor=CINZA_MEDIO,
-        spaceBefore=0,
-        spaceAfter=0
+        spaceAfter=1
     )
 
     estilo_valor = ParagraphStyle(
         "Valor",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=7.5,
-        leading=8.7,
-        textColor=CINZA_TEXTO,
-        spaceBefore=0,
-        spaceAfter=0
+        fontSize=7.2,
+        leading=8.2,
+        textColor=CINZA_TEXTO
     )
 
     estilo_valor_bold = ParagraphStyle(
@@ -142,8 +124,8 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         "TD",
         parent=styles["Normal"],
         fontName="Helvetica",
-        fontSize=6.9,
-        leading=7.7,
+        fontSize=6.8,
+        leading=7.6,
         alignment=TA_CENTER,
         textColor=CINZA_TEXTO
     )
@@ -159,7 +141,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         parent=styles["Normal"],
         fontName="Helvetica",
         fontSize=6.5,
-        leading=7.7,
+        leading=7.5,
         textColor=CINZA_MEDIO
     )
 
@@ -174,7 +156,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     )
 
     # ------------------------------------------------------------------
-    # DADOS DO ALUNO
+    # TRATAMENTO DOS DADOS DO ALUNO
     # ------------------------------------------------------------------
     if isinstance(dados_aluno, dict):
         d = dados_aluno
@@ -190,29 +172,38 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 return str(v).strip()
         return padrao
 
-    curso = valor("curso", padrao="TÉCNICO EM ENFERMAGEM")
+    curso = valor("curso", padrao="CURSO TÉCNICO EM NUTRIÇÃO E DIETÉTICA").upper()
     matricula = valor("matricula", "matrícula")
     turma = valor("turma")
     sigla = valor("sigla")
-    nome = valor("nome")
+    nome = valor("nome").upper()
     cpf = valor("cpf")
-    sexo = valor("sexo")
-    mae = valor("mae", "nome_mae")
-    pai = valor("pai", "nome_pai")
+    sexo = valor("sexo").upper()
+    mae = valor("mae", "nome_mae").upper()
+    pai = valor("pai", "nome_pai").upper()
     dt_nasc = valor("data_nascimento")
-    nacionalidade = valor("nacionalidade", padrao="Brasileira")
-    naturalidade = valor("naturalidade")
-    uf = valor("uf", padrao="DF")
+    
+    # Tratamento para remover espaços incorretos em palavras como "BRASILEIRA"
+    nacionalidade = valor("nacionalidade", padrao="BRASILEIRA").upper().replace(" ", "")
+    if not nacionalidade:
+        nacionalidade = "BRASILEIRA"
+        
+    naturalidade = valor("naturalidade").upper()
+    uf = valor("uf", padrao="DF").upper()
     rg = valor("rg")
-    orgao = valor("orgao_expeditor")
+    orgao = valor("orgao_expeditor", "orgao").upper()
     dt_exp = valor("data_expedicao")
+
+    # Formatação combinada de RG / Órgão / Expedição para evitar confusão com datas
+    doc_rg_partes = [x for x in [rg, orgao, dt_exp] if x]
+    doc_rg_str = " - ".join(doc_rg_partes) if doc_rg_partes else "—"
 
     # ------------------------------------------------------------------
     # BASE LEGAL
     # ------------------------------------------------------------------
     base_legal_texto = (
-        "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, "
-        "RESOLUÇÃO Nº 02/2023 - CEDF"
+        "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 04/99 - CEB/CNE, "
+        "RESOLUÇÃO Nº 02/2023 - CEDF, PARECER Nº 27/2013-CEDF, PORTARIA Nº 56/2013 SEDF"
     )
 
     if sigla and turma:
@@ -242,13 +233,13 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     path_logo_escola = "logo_escola.png"
 
     img_gdf = (
-        Image(path_logo_gdf, width=42, height=42)
+        Image(path_logo_gdf, width=38, height=38)
         if os.path.exists(path_logo_gdf)
         else Paragraph("", estilo_valor)
     )
 
     img_escola = (
-        Image(path_logo_escola, width=42, height=42)
+        Image(path_logo_escola, width=38, height=38)
         if os.path.exists(path_logo_escola)
         else Paragraph("", estilo_valor)
     )
@@ -266,8 +257,8 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     cabecalho = Table(
         [[img_gdf, texto_institucional, img_escola]],
-        colWidths=[52, 450, 52],
-        rowHeights=[51],
+        colWidths=[45, 464, 45],
+        rowHeights=[45],
         hAlign="LEFT"
     )
 
@@ -277,130 +268,101 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("ALIGN", (2, 0), (2, 0), "CENTER"),
         ("ALIGN", (1, 0), (1, 0), "CENTER"),
         ("LINEBELOW", (0, 0), (-1, -1), 0.8, CINZA_LINHA),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
 
-    # ------------------------------------------------------------------
-    # FUNÇÕES AUXILIARES DE DIAGRAMAÇÃO
-    # ------------------------------------------------------------------
-    def bloco_secao(titulo):
-        t = Table(
-            [[Paragraph(titulo, estilo_secao)]],
-            colWidths=[554],
-            rowHeights=[17],
-            hAlign="LEFT"
-        )
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), CINZA_CAB),
-            ("LINEBELOW", (0, 0), (-1, -1), 0.5, CINZA_LINHA),
-            ("LEFTPADDING", (0, 0), (-1, -1), 7),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 7),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
-        return t
-
-    def tabela_campos(linhas, larguras):
-        t = Table(linhas, colWidths=larguras, hAlign="LEFT")
-        t.setStyle(TableStyle([
-            ("GRID", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
-        return t
-
     story = []
-
-    # Cabeçalho e Título Principal
     story.append(cabecalho)
     story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo))
 
-    # Identificação Acadêmica (Soma exata: 330 + 110 + 114 = 554 pt)
-    story.append(bloco_secao("IDENTIFICAÇÃO ACADÊMICA"))
-    identificacao = [
+    # ------------------------------------------------------------------
+    # ORGANIZAÇÃO DAS LINHAS DO ESTUDANTE (GRELHA DE DADOS)
+    # Largura total: 554 pt. Distribuição: [200, 110, 144, 100]
+    # ------------------------------------------------------------------
+    def celula_campo(rotulo, valor_txt, em_negrito=False):
+        est_val = estilo_valor_bold if em_negrito else estilo_valor
+        return [
+            Paragraph(rotulo, estilo_label),
+            Paragraph(valor_txt or "—", est_val)
+        ]
+
+    dados_estudante_grid = [
+        # Linha 1: Curso / Nome / CPF / Sexo
         [
-            Paragraph("CURSO", estilo_label),
-            Paragraph("MATRÍCULA", estilo_label),
-            Paragraph("TURMA / TURNO", estilo_label),
+            celula_campo("Curso", curso, em_negrito=True),
+            celula_campo("Nome", nome, em_negrito=True),
+            celula_campo("CPF", cpf),
+            celula_campo("Sexo", sexo),
         ],
+        # Linha 2: Matrícula / Turma / Mãe / Pai
         [
-            Paragraph(curso, estilo_valor_bold),
-            Paragraph(matricula or "—", estilo_valor),
-            Paragraph(turma or "—", estilo_valor),
+            celula_campo("Matrícula", matricula, em_negrito=True),
+            celula_campo("Turma", turma, em_negrito=True),
+            celula_campo("Nome da Mãe", mae),
+            celula_campo("Nome do Pai", pai),
+        ],
+        # Linha 3: Data Nasc. / Nacionalidade / Naturalidade-UF / RG-Órgão-Expedição
+        [
+            celula_campo("Data de Nascimento", dt_nasc),
+            celula_campo("Nacionalidade", nacionalidade),
+            celula_campo("Naturalidade / UF", f"{naturalidade} / {uf}".strip(" /")),
+            celula_campo("RG / Órgão / Expedição", doc_rg_str),
         ],
     ]
-    story.append(tabela_campos(identificacao, [330, 110, 114]))
-    story.append(Spacer(1, 4))
 
-    # Dados do Estudante (Soma exata por linha: 300 + 120 + 134 = 554 pt)
-    story.append(bloco_secao("DADOS DO ESTUDANTE"))
-    dados_estudante = [
-        [
-            Paragraph("NOME", estilo_label),
-            Paragraph("CPF", estilo_label),
-            Paragraph("SEXO", estilo_label),
-        ],
-        [
-            Paragraph(nome or "—", estilo_valor_bold),
-            Paragraph(cpf or "—", estilo_valor),
-            Paragraph(sexo or "—", estilo_valor),
-        ],
-        [
-            Paragraph("NOME DA MÃE", estilo_label),
-            Paragraph("NOME DO PAI", estilo_label),
-            Paragraph("DATA DE NASCIMENTO", estilo_label),
-        ],
-        [
-            Paragraph(mae or "—", estilo_valor),
-            Paragraph(pai or "—", estilo_valor),
-            Paragraph(dt_nasc or "—", estilo_valor),
-        ],
-        [
-            Paragraph("NACIONALIDADE", estilo_label),
-            Paragraph("NATURALIDADE / UF", estilo_label),
-            Paragraph("RG / ÓRGÃO / DATA DE EXPEDIÇÃO", estilo_label),
-        ],
-        [
-            Paragraph(nacionalidade or "—", estilo_valor),
-            Paragraph(f"{naturalidade} / {uf}".strip(" /") or "—", estilo_valor),
-            Paragraph(" ".join(x for x in [rg, orgao, dt_exp] if x) or "—", estilo_valor),
-        ],
+    tabela_dados = Table(
+        dados_estudante_grid,
+        colWidths=[130, 184, 140, 100],
+        hAlign="LEFT"
+    )
+
+    tabela_dados.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.4, CINZA_LINHA),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+
+    story.append(tabela_dados)
+
+    # ------------------------------------------------------------------
+    # BASE LEGAL (Linha Integrada de Largura Total: 554 pt)
+    # ------------------------------------------------------------------
+    celula_base_legal = [
+        Paragraph("Base Legal", estilo_label),
+        Paragraph(base_legal_texto, estilo_valor)
     ]
-    story.append(tabela_campos(dados_estudante, [300, 120, 134]))
-    story.append(Spacer(1, 4))
-
-    # Base Legal (Soma exata: 554 pt)
-    story.append(bloco_secao("BASE LEGAL"))
-    base_legal = Table(
-        [[Paragraph(base_legal_texto, estilo_valor)]],
+    
+    tabela_base_legal = Table(
+        [[celula_base_legal]],
         colWidths=[554],
         hAlign="LEFT"
     )
-    base_legal.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
+    tabela_base_legal.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.4, CINZA_LINHA),
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FAFAFA")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
-    story.append(base_legal)
-    story.append(Spacer(1, 5))
+
+    story.append(tabela_base_legal)
+    story.append(Spacer(1, 4))
 
     # ------------------------------------------------------------------
-    # HISTÓRICO ACADÊMICO (Soma exata: 314 + 40 + 30 + 65 + 45 + 60 = 554 pt)
+    # HISTÓRICO ACADÊMICO (Soma exata: 314 + 50 + 35 + 55 + 40 + 60 = 554 pt)
     # ------------------------------------------------------------------
     header_hist = [
-        Paragraph("COMPONENTE CURRICULAR", estilo_th),
-        Paragraph("SEM.", estilo_th),
+        Paragraph("Componente Curricular", estilo_th),
+        Paragraph("Semestre", estilo_th),
         Paragraph("CH", estilo_th),
-        Paragraph("MÓDULO", estilo_th),
-        Paragraph("FALTAS", estilo_th),
-        Paragraph("RESULTADO", estilo_th),
+        Paragraph("Módulo", estilo_th),
+        Paragraph("Faltas", estilo_th),
+        Paragraph("Resultado", estilo_th),
     ]
 
     tabela_hist_dados = [header_hist]
@@ -414,11 +376,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
                 )
             )
             
-            # Verifica se o semestre foi lançado (Lógica aplicada)
             sem = str(row.get("semestre", "")).strip()
             
             if not sem or sem.lower() in ("none", "nan", ""):
-                # Mantém os campos acadêmicos limpos se não houver semestre
                 sem = ""
                 ch = ""
                 mod = ""
@@ -442,16 +402,15 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     t_hist = Table(
         tabela_hist_dados,
         repeatRows=1,
-        colWidths=[314, 40, 30, 65, 45, 60],
+        colWidths=[314, 50, 35, 55, 40, 60],
         hAlign="LEFT"
     )
 
     estilo_hist = [
         ("BACKGROUND", (0, 0), (-1, 0), CINZA_CAB),
         ("LINEBELOW", (0, 0), (-1, 0), 0.7, CINZA_LINHA),
-        ("GRID", (0, 0), (-1, -1), 0.3, CINZA_LINHA),
+        ("GRID", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
         ("TOPPADDING", (0, 0), (-1, -1), 2.5),
@@ -469,7 +428,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # BLOCO FINAL (Legenda, Data e Assinaturas alinhados a 554 pt)
+    # BLOCO FINAL (Legenda, Data e Assinaturas)
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
@@ -538,9 +497,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     bloco_final = KeepTogether([
         rodape_legenda,
-        Spacer(1, 9),
+        Spacer(1, 8),
         data_tabela,
-        Spacer(1, 23),
+        Spacer(1, 20),
         assinatura
     ])
 
@@ -578,7 +537,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
         canvas.restoreState()
 
-    # GERAÇÃO
+    # GERAÇÃO DO PDF
     doc.build(
         story,
         onFirstPage=desenhar_rodape,
@@ -587,7 +546,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     buffer.seek(0)
     return buffer.getvalue()
-
 
 
 
