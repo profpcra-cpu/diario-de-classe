@@ -2736,3 +2736,37 @@ def gerar_pdf_passes_turma_unificado(df_turma, turma_nome=""):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+# ============================================================
+# RENOVAÇÃO DE MATRÍCULA (Individual)
+# ============================================================
+
+def gerar_pdf_renovacao_matricula(dados_aluno):
+    """
+    Gera o documento de Renovação de Matrícula em A4.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=22, bottomMargin=24)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("FICHA DE RENOVAÇÃO DE MATRÍCULA", styles["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ============================================================
+# RENOVAÇÃO DE MATRÍCULA DA TURMA (Unificado em Lote)
+# ============================================================
+
+def gerar_pdf_renovacao_turma_unificado(df_turma):
+    """
+    Gera o relatório unificado de fichas de renovação de matrícula da turma inteira.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=22, bottomMargin=24)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("RENOVAÇÕES DE MATRÍCULA - TURMA UNIFICADA", styles["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
