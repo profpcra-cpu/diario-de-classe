@@ -27,7 +27,7 @@ import pandas as pd
 
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether, PageBreak
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -38,8 +38,8 @@ from modulos.conexao import executar_query
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
     Gera o Histórico Escolar Oficial em A4, com diagramação institucional,
-    alinhamento rigoroso de colunas e inclusão dinâmica do bloco de 
-    Competências e Habilidades conforme a base legal/turma.
+    alinhamento rigoroso de colunas, quebra de página forçada para Competências
+    e repetição do cabeçalho na segunda página.
     """
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
         df_historico, dados_aluno = dados_aluno, df_historico
@@ -96,7 +96,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     estilo_rodape = ParagraphStyle("Rodape", parent=styles["Normal"], fontName="Helvetica", fontSize=6.5, leading=7.7, textColor=CINZA_MEDIO)
     estilo_assinatura = ParagraphStyle("Assinatura", parent=styles["Normal"], fontName="Helvetica", fontSize=7, leading=8, alignment=TA_CENTER, textColor=PRETO)
     
-    # Estilos específicos para o bloco de Competências e Habilidades
     estilo_comp_texto = ParagraphStyle(
         "CompTexto", parent=styles["Normal"], fontName="Helvetica", fontSize=6.8, leading=8.5, alignment=TA_LEFT, textColor=CINZA_TEXTO
     )
@@ -195,6 +194,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ]))
         return t
 
+    # --- PÁGINA 1 ---
     story = [cabecalho, Paragraph("HISTÓRICO ESCOLAR", estilo_titulo), bloco_secao("IDENTIFICAÇÃO ACADÊMICA")]
     
     identificacao = [
@@ -214,20 +214,24 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         [Paragraph(nacionalidade or "—", estilo_valor), Paragraph(f"{naturalidade} / {uf}".strip(" /") or "—", estilo_valor), Paragraph(" ".join(x for x in [rg, orgao, dt_exp] if x) or "—", estilo_valor)],
     ]
     story.append(tabela_campos(dados_estudante, [300, 120, 134]))
-    story.append(Spacer(1, 3))
+    
+    # --- QUEBRA DE PÁGINA PARA A SEGUNDA PÁGINA ---
+    story.append(PageBreak())
+
+    # --- PÁGINA 2 (Repete o cabeçalho institucional no topo) ---
+    story.append(cabecalho)
+    story.append(Spacer(1, 4))
 
     story.append(bloco_secao("COMPETÊNCIAS E HABILIDADES"))
     
-    # Se houver competências cadastradas, cria a caixa exata idêntica à imagem
     if competencias_texto:
-        # Formata quebras de linha para o motor do ReportLab
         comp_formatado = competencias_texto.replace("\n", "<br/>")
         tabela_comp = Table([[Paragraph(comp_formatado, estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
     else:
         tabela_comp = Table([[Paragraph("Nenhuma competência cadastrada para esta turma/sigla.", estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
         
     tabela_comp.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#1A365D")), # Caixa azul elegante idêntica ao modelo
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#1A365D")),
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -238,7 +242,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(tabela_comp)
     story.append(Spacer(1, 4))
 
-    # Tabela de Componentes Curriculares / Histórico
     header_hist = [
         Paragraph("COMPONENTE CURRICULAR", estilo_th),
         Paragraph("SEM.", estilo_th),
@@ -285,7 +288,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(t_hist)
     story.append(Spacer(1, 4))
 
-    # Bloco Institucional Rodapé (Autenticidade e Assinaturas)
     rodape_autenticidade = Table([[
         Paragraph("<b>Centro de Educação Profissional - Escola Técnica de Planaltina</b><br/>"
                   "Conferido o presente documento, declaramos sua autenticidade e regularidade, "
@@ -343,7 +345,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     doc.build(story, onFirstPage=desenhar_rodape, onLaterPages=desenhar_rodape)
     buffer.seek(0)
     return buffer.getvalue()
-
 # ============================================================
 # 2. MATRIZ AFIN
 # ============================================================
