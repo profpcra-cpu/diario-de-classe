@@ -25,9 +25,10 @@ CINZA_TEXTO  = colors.HexColor("#263238")
 CINZA_MEDIO  = colors.HexColor("#5F6B72")
 CINZA_LINHA  = colors.HexColor("#A0AAB0")
 CINZA_CAB    = colors.HexColor("#E7EAEC")
-CINZA_ZEBRA  = colors.HexColor("#FAFAFA")
-CINZA_RODAPE = colors.HexColor("#F7F8F8")
 PRETO        = colors.HexColor("#111111")
+
+# Fundos agora em BRANCO puro (antes #FAFAFA / #F7F8F8 com tom rosado)
+BRANCO       = colors.white
 
 BASE_LEGAL_PADRAO = (
     "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 04/99 - CEB/CNE, "
@@ -194,8 +195,38 @@ def _separar_competencias(texto):
     if m_hab:
         return "", texto[m_hab.end():].strip()
 
-    # Sem marcadores → tudo vai para competências
     return texto, ""
+
+
+# ======================================================================
+# CABEÇALHO INSTITUCIONAL (reutilizado em todas as páginas)
+# ======================================================================
+def _montar_cabecalho():
+    texto_institucional = [
+        Paragraph("GOVERNO DO DISTRITO FEDERAL", STYLES["institucional_bold"]),
+        Paragraph("Secretaria de Estado de Educação", STYLES["institucional"]),
+        Paragraph("Subsecretaria de Educação Básica", STYLES["institucional"]),
+        Paragraph("Coordenação Regional de Ensino de Planaltina", STYLES["institucional"]),
+        Paragraph("Centro de Educação Profissional Escola Técnica de Planaltina",
+                  STYLES["institucional_bold"]),
+    ]
+
+    cabecalho = Table(
+        [[_carregar_logo("logo_gdf.png"),
+          texto_institucional,
+          _carregar_logo("logo_escola.png")]],
+        colWidths=[45, 464, 45],
+        rowHeights=[45],
+        hAlign="LEFT",
+    )
+    cabecalho.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.8, CINZA_LINHA),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]))
+
+    return [cabecalho, Paragraph("HISTÓRICO ESCOLAR", STYLES["titulo"])]
 
 
 # ======================================================================
@@ -223,7 +254,7 @@ def _montar_segunda_pagina(competencias_txt, nome, curso, matricula, data_doc):
         story.append(Paragraph("—", STYLES["secao_texto"]))
     story.append(Spacer(1, 14))
 
-    # --- Caixa de certificação ---
+    # --- Caixa de certificação (fundo branco) ---
     texto_cert = (
         f"O <b>Centro de Educação Profissional – Escola Técnica de Planaltina</b>, "
         f"no uso de suas atribuições, certifica que o(a) aluno(a) "
@@ -241,7 +272,7 @@ def _montar_segunda_pagina(competencias_txt, nome, curso, matricula, data_doc):
     )
     tabela_cert.setStyle(TableStyle([
         ("BOX",        (0, 0), (-1, -1), 0.4, CINZA_LINHA),
-        ("BACKGROUND", (0, 0), (-1, -1), CINZA_ZEBRA),
+        ("BACKGROUND", (0, 0), (-1, -1), BRANCO),   # ← sem fundo rosado
         ("LEFTPADDING",  (0, 0), (-1, -1), 6),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ("TOPPADDING",   (0, 0), (-1, -1), 5),
@@ -296,7 +327,7 @@ def _montar_segunda_pagina(competencias_txt, nome, curso, matricula, data_doc):
 # FUNÇÃO PRINCIPAL
 # ======================================================================
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """Gera o Histórico Escolar em 2 páginas A4."""
+    """Gera o Histórico Escolar em 2 páginas A4, com cabeçalho repetido."""
 
     # Compatibilidade com chamada invertida
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
@@ -352,34 +383,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     # ------------------------------------------------------------------
     # PÁGINA 1 — Cabeçalho
     # ------------------------------------------------------------------
-    texto_institucional = [
-        Paragraph("GOVERNO DO DISTRITO FEDERAL", STYLES["institucional_bold"]),
-        Paragraph("Secretaria de Estado de Educação", STYLES["institucional"]),
-        Paragraph("Subsecretaria de Educação Básica", STYLES["institucional"]),
-        Paragraph("Coordenação Regional de Ensino de Planaltina", STYLES["institucional"]),
-        Paragraph("Centro de Educação Profissional Escola Técnica de Planaltina",
-                  STYLES["institucional_bold"]),
-    ]
-
-    cabecalho = Table(
-        [[_carregar_logo("logo_gdf.png"),
-          texto_institucional,
-          _carregar_logo("logo_escola.png")]],
-        colWidths=[45, 464, 45],
-        rowHeights=[45],
-        hAlign="LEFT",
-    )
-    cabecalho.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.8, CINZA_LINHA),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-    ]))
-
-    story = [
-        cabecalho,
-        Paragraph("HISTÓRICO ESCOLAR", STYLES["titulo"]),
-    ]
+    story = _montar_cabecalho()
 
     # ------------------------------------------------------------------
     # Grade de dados do estudante
@@ -418,7 +422,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(tabela_dados)
 
     # ------------------------------------------------------------------
-    # Base legal
+    # Base legal (fundo branco)
     # ------------------------------------------------------------------
     tabela_base_legal = Table(
         [[[Paragraph("Base Legal", STYLES["label"]),
@@ -428,7 +432,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     )
     tabela_base_legal.setStyle(TableStyle([
         ("BOX", (0, 0), (-1, -1), 0.4, CINZA_LINHA),
-        ("BACKGROUND", (0, 0), (-1, -1), CINZA_ZEBRA),
+        ("BACKGROUND", (0, 0), (-1, -1), BRANCO),   # ← sem fundo rosado
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING",  (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
@@ -439,7 +443,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(Spacer(1, 4))
 
     # ------------------------------------------------------------------
-    # Histórico acadêmico
+    # Histórico acadêmico (sem zebra; só linhas de grade)
     # ------------------------------------------------------------------
     tabela_hist_dados = [[
         Paragraph("Componente Curricular", STYLES["th"]),
@@ -489,16 +493,14 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("TOPPADDING",   (0, 0), (-1, -1), 2.5),
         ("BOTTOMPADDING",(0, 0), (-1, -1), 2.5),
     ]
-    estilo_hist.extend(
-        ("BACKGROUND", (0, i), (-1, i), CINZA_ZEBRA)
-        for i in range(2, len(tabela_hist_dados), 2)
-    )
+    # Sem zebra: nenhum BACKGROUND nas linhas de dados (fundo branco natural)
+
     t_hist.setStyle(TableStyle(estilo_hist))
     story.append(t_hist)
     story.append(Spacer(1, 5))
 
     # ------------------------------------------------------------------
-    # Bloco final da página 1
+    # Bloco final da página 1 (sem fundo rosado)
     # ------------------------------------------------------------------
     rodape_legenda = Table(
         [[
@@ -513,7 +515,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         hAlign="LEFT",
     )
     rodape_legenda.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), CINZA_RODAPE),
+        ("BACKGROUND", (0, 0), (-1, -1), BRANCO),   # ← sem fundo rosado
         ("BOX",        (0, 0), (-1, -1), 0.35, CINZA_LINHA),
         ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING",  (0, 0), (-1, -1), 5),
@@ -564,9 +566,10 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     ]))
 
     # ------------------------------------------------------------------
-    # PÁGINA 2 — Competências, Habilidades, Certificação e Assinaturas
+    # PÁGINA 2 — Cabeçalho repetido + Competências/Habilidades
     # ------------------------------------------------------------------
     story.append(PageBreak())
+    story.extend(_montar_cabecalho())   # ← cabeçalho institucional repetido
     story.extend(
         _montar_segunda_pagina(
             competencias_txt=competencias_habilidades,
@@ -578,7 +581,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     )
 
     # ------------------------------------------------------------------
-    # Rodapé de página (canvas)
+    # Rodapé de página (canvas) — aplica-se a TODAS as páginas
     # ------------------------------------------------------------------
     def desenhar_rodape(canvas, doc_):
         canvas.saveState()
