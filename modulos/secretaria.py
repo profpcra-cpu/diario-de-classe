@@ -2,8 +2,8 @@ import io
 import pandas as pd
 import streamlit as st
 
-from .conexao import executar_query
-from .pdf_generator import (
+from modulos.conexao import executar_query
+from modulos.pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
@@ -166,7 +166,6 @@ def renderizar_modulo_secretaria():
                     st.markdown("### 📝 Editor Personalizado e Emissão de Documentos")
                     st.info("Selecione o documento oficial abaixo. O cabeçalho e dados virão pré-preenchidos automaticamente.")
 
-                    # Seleção do documento (incluindo Renovação de Matrícula)
                     tipo_documento = st.selectbox(
                         "Selecione o Documento a Emitir:",
                         [
@@ -180,7 +179,6 @@ def renderizar_modulo_secretaria():
 
                     dados_originais = df_dados_pessoais.iloc[0].to_dict()
 
-                    # Formulário de Edição Pré-Impressão
                     with st.form(key=f"form_edicao_doc_{matricula_busca}"):
                         st.markdown(f"**A ajustar parâmetros para:** `{tipo_documento}`")
                         
@@ -197,7 +195,6 @@ def renderizar_modulo_secretaria():
                             edit_sexo = st.text_input("Sexo:", value=str(dados_originais.get("sexo", "")))
                             edit_data_emissao = st.text_input("Data do Documento:", value="29/09/2026")
 
-                        # Campos dinâmicos dependendo do tipo de documento
                         if tipo_documento == "Renovação de Matrícula":
                             st.markdown("---")
                             st.markdown("📋 **Campos Específicos (Renovação de Matrícula):**")
@@ -231,7 +228,6 @@ def renderizar_modulo_secretaria():
 
                         botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
 
-                    # Ação ao submeter
                     if botao_gerar_editado:
                         dados_customizados = dados_originais.copy()
                         dados_customizados["nome"] = edit_nome
@@ -279,9 +275,6 @@ def renderizar_modulo_secretaria():
                             use_container_width=True,
                         )
 
-                    # ---------------------------------------------------------
-                    # EMISSÃO UNIFICADA EM LOTE (POR TURMA)
-                    # ---------------------------------------------------------
                     st.markdown("---")
                     st.markdown("### 📚 Emissão Unificada em Lote (Turma Inteira)")
                     
