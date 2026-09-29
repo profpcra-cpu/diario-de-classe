@@ -589,17 +589,21 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     return buffer.getvalue()
 
 
+
+
+
+
 # -*- coding: utf-8 -*-
 """
 Gerador profissional da Matriz AFIN - CEP ETP.
 
 Características:
 - A4 paisagem
+- Paleta visual baseada na planilha (Azul Institucional + Amarelo Creme)
 - 21 colunas acadêmicas por página
 - Matrícula e Estudante repetidos em todas as páginas
 - Cabeçalho institucional minimalista
 - Tipografia otimizada para impressão
-- Baixa poluição visual
 - Compatível com impressão colorida ou escala de cinza
 - Quebra automática de nomes extensos de UCs
 - Cabeçalho da tabela repetido automaticamente
@@ -608,7 +612,6 @@ Características:
 
 import io
 import re
-
 import pandas as pd
 
 from reportlab.lib import colors
@@ -625,7 +628,6 @@ from reportlab.platypus import (
     PageBreak,
 )
 
-
 # ============================================================
 # CONFIGURAÇÕES GERAIS
 # ============================================================
@@ -640,29 +642,24 @@ MARGEM_INF = 9 * mm
 LARGURA_MATRICULA = 24 * mm
 LARGURA_ESTUDANTE = 49 * mm
 
-
 # ============================================================
-# PALETA INSTITUCIONAL
+# PALETA INSTITUCIONAL (EXTRAÍDA DA PLANILHA)
 # ============================================================
-#
-# A ideia aqui não é colorir a tabela.
-# A cor é usada apenas para criar hierarquia no cabeçalho.
-#
 
-AZUL_INSTITUCIONAL = colors.HexColor("#173B63")
-AZUL_SECUNDARIO = colors.HexColor("#315D82")
+AZUL_HEADER_PRINCIPAL = colors.HexColor("#5383B8")  # SEEDF / CEP ETP / CURSO
+AMARELO_UC_HEADER     = colors.HexColor("#FFF2CC")  # UCs / Semestre / Turma
+AZUL_MUITO_CLARO      = colors.HexColor("#EBF2FA")
 
-AZUL_MUITO_CLARO = colors.HexColor("#F2F6FA")
+CINZA_TEXTO           = colors.HexColor("#111111")
+CINZA_SECUNDARIO      = colors.HexColor("#555555")
 
-CINZA_TEXTO = colors.HexColor("#28343F")
-CINZA_SECUNDARIO = colors.HexColor("#68737D")
+CINZA_LINHA           = colors.HexColor("#D0D5DD")
+CINZA_LINHA_SUAVE     = colors.HexColor("#E5E7EB")
 
-CINZA_LINHA = colors.HexColor("#D7DDE3")
-CINZA_LINHA_SUAVE = colors.HexColor("#E9EDF1")
+FUNDO_DADOS           = colors.HexColor("#FFFEF7")  # Fundo creme suave
+CINZA_ZEBRA           = colors.HexColor("#F5F3EB")  # Zebra creme
 
-CINZA_ZEBRA = colors.HexColor("#FAFBFC")
-
-BRANCO = colors.white
+BRANCO                = colors.white
 
 
 # ============================================================
@@ -670,31 +667,22 @@ BRANCO = colors.white
 # ============================================================
 
 def _texto(valor):
-    """
-    Converte qualquer valor em texto seguro para o PDF.
-    Valores nulos ficam vazios.
-    """
+    """Converte qualquer valor em texto seguro para o PDF."""
     if valor is None:
         return ""
-
     try:
         if pd.isna(valor):
             return ""
     except Exception:
         pass
-
     texto = str(valor).strip()
-
     if texto.lower() in {"nan", "nat", "none"}:
         return ""
-
     return texto
 
 
 def _html(valor):
-    """
-    Escapa caracteres especiais para uso dentro de Paragraph.
-    """
+    """Escapa caracteres especiais para uso dentro de Paragraph."""
     return (
         _texto(valor)
         .replace("&", "&amp;")
@@ -704,14 +692,8 @@ def _html(valor):
 
 
 def _normalizar(valor):
-    """
-    Normalização usada para comparação de nomes de UCs.
-    """
-    return re.sub(
-        r"\s+",
-        " ",
-        _texto(valor).upper()
-    ).strip()
+    """Normalização usada para comparação de nomes de UCs."""
+    return re.sub(r"\s+", " ", _texto(valor).upper()).strip()
 
 
 # ============================================================
@@ -719,36 +701,17 @@ def _normalizar(valor):
 # ============================================================
 
 def _tipo_coluna(nome):
-    """
-    Identifica se uma coluna representa:
-
-    FAL = faltas
-    CON = conceito
-    None = outro tipo
-    """
-
+    """Identifica FAL (Faltas) ou CON (Conceito)."""
     s = _normalizar(nome)
-
-    if re.search(
-        r"(?:^|[\s_-])(?:FAL|FALTAS)(?:$|[\s_-])",
-        s
-    ):
+    if re.search(r"(?:^|[\s_-])(?:FAL|FALTAS)(?:$|[\s_-])", s):
         return "FAL"
-
-    if re.search(
-        r"(?:^|[\s_-])(?:CON|CONCEITO)(?:$|[\s_-])",
-        s
-    ):
+    if re.search(r"(?:^|[\s_-])(?:CON|CONCEITO)(?:$|[\s_-])", s):
         return "CON"
-
     return None
 
 
 def _nome_uc(nome):
-    """
-    Remove o sufixo FAL/CON do nome da coluna.
-    """
-
+    """Remove o sufixo FAL/CON do nome da coluna."""
     return re.sub(
         r"\s*[-–—]\s*(?:FAL|FALTAS|CON|CONCEITO)\s*$",
         "",
@@ -758,24 +721,15 @@ def _nome_uc(nome):
 
 
 def _mapa_iduc(mapa):
-    """
-    Normaliza o mapa {iduc: nome_uc}
-    para facilitar a localização do IDUC.
-    """
-
+    """Normaliza o mapa {iduc: nome_uc}."""
     if not mapa:
         return {}
-
     resultado = {}
-
     for iduc, nome in mapa.items():
         nome = _texto(nome)
-
         if not nome:
             continue
-
         resultado[_normalizar(nome)] = _texto(iduc)
-
     return resultado
 
 
@@ -784,178 +738,77 @@ def _mapa_iduc(mapa):
 # ============================================================
 
 def _estilos():
-    """
-    Centraliza toda a tipografia do documento.
-
-    A intenção é evitar que o PDF fique com muitas fontes,
-    pesos ou tamanhos diferentes.
-    """
-
     base = getSampleStyleSheet()
-
     return {
-
-        # ----------------------------------------------------
-        # CABEÇALHO INSTITUCIONAL
-        # ----------------------------------------------------
-
         "instituicao": ParagraphStyle(
-            "AFINInstituicao",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=8.2,
-            leading=9.2,
-            alignment=TA_CENTER,
-            textColor=AZUL_INSTITUCIONAL,
-            spaceAfter=0,
+            "AFINInstituicao", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=8.5, leading=9.5,
+            alignment=TA_CENTER, textColor=BRANCO
         ),
-
         "titulo": ParagraphStyle(
-            "AFINTitulo",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=10.2,
-            leading=11,
-            alignment=TA_CENTER,
-            textColor=AZUL_INSTITUCIONAL,
-            spaceAfter=0,
+            "AFINTitulo", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=10.5, leading=11.5,
+            alignment=TA_CENTER, textColor=BRANCO
         ),
-
         "subtitulo": ParagraphStyle(
-            "AFINSubtitulo",
-            parent=base["Normal"],
-            fontName="Helvetica",
-            fontSize=6.5,
-            leading=7.2,
-            alignment=TA_CENTER,
-            textColor=CINZA_SECUNDARIO,
-            spaceAfter=0,
+            "AFINSubtitulo", parent=base["Normal"],
+            fontName="Helvetica", fontSize=7, leading=8,
+            alignment=TA_CENTER, textColor=BRANCO
         ),
-
-        # ----------------------------------------------------
-        # IDENTIFICAÇÃO
-        # ----------------------------------------------------
-
         "label": ParagraphStyle(
-            "AFINLabel",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=5.9,
-            leading=6.5,
-            alignment=TA_LEFT,
-            textColor=CINZA_SECUNDARIO,
+            "AFINLabel", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=6, leading=6.5,
+            alignment=TA_LEFT, textColor=CINZA_SECUNDARIO
         ),
-
         "valor": ParagraphStyle(
-            "AFINValor",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=8,
-            leading=8.5,
-            alignment=TA_LEFT,
-            textColor=CINZA_TEXTO,
+            "AFINValor", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=8, leading=8.5,
+            alignment=TA_LEFT, textColor=CINZA_TEXTO
         ),
-
-        # ----------------------------------------------------
-        # CABEÇALHO DA MATRIZ
-        # ----------------------------------------------------
-
         "matricula_header": ParagraphStyle(
-            "AFINMatriculaHeader",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=5.7,
-            leading=6.2,
-            alignment=TA_CENTER,
-            textColor=BRANCO,
+            "AFINMatriculaHeader", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=5.8, leading=6.2,
+            alignment=TA_CENTER, textColor=BRANCO
         ),
-
         "estudante_header": ParagraphStyle(
-            "AFINEstudanteHeader",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=5.7,
-            leading=6.2,
-            alignment=TA_LEFT,
-            textColor=BRANCO,
+            "AFINEstudanteHeader", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=5.8, leading=6.2,
+            alignment=TA_LEFT, textColor=BRANCO
         ),
-
         "uc": ParagraphStyle(
-            "AFINUC",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=5.1,
-            leading=5.5,
-            alignment=TA_CENTER,
-            textColor=AZUL_INSTITUCIONAL,
+            "AFINUC", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=5.2, leading=5.6,
+            alignment=TA_CENTER, textColor=CINZA_TEXTO
         ),
-
         "iduc": ParagraphStyle(
-            "AFINIDUC",
-            parent=base["Normal"],
-            fontName="Helvetica",
-            fontSize=4.8,
-            leading=5.1,
-            alignment=TA_CENTER,
-            textColor=CINZA_SECUNDARIO,
+            "AFINIDUC", parent=base["Normal"],
+            fontName="Helvetica", fontSize=4.8, leading=5.1,
+            alignment=TA_CENTER, textColor=CINZA_SECUNDARIO
         ),
-
         "indicador": ParagraphStyle(
-            "AFINIndicador",
-            parent=base["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=5,
-            leading=5.2,
-            alignment=TA_CENTER,
-            textColor=BRANCO,
+            "AFINIndicador", parent=base["Normal"],
+            fontName="Helvetica-Bold", fontSize=5, leading=5.2,
+            alignment=TA_CENTER, textColor=CINZA_TEXTO
         ),
-
-        # ----------------------------------------------------
-        # CORPO
-        # ----------------------------------------------------
-
         "matricula": ParagraphStyle(
-            "AFINMatricula",
-            parent=base["Normal"],
-            fontName="Helvetica",
-            fontSize=6.4,
-            leading=7,
-            alignment=TA_CENTER,
-            textColor=CINZA_TEXTO,
+            "AFINMatricula", parent=base["Normal"],
+            fontName="Helvetica", fontSize=6.4, leading=7,
+            alignment=TA_CENTER, textColor=CINZA_TEXTO
         ),
-
         "nome": ParagraphStyle(
-            "AFINNome",
-            parent=base["Normal"],
-            fontName="Helvetica",
-            fontSize=6.5,
-            leading=7.1,
-            alignment=TA_LEFT,
-            textColor=CINZA_TEXTO,
+            "AFINNome", parent=base["Normal"],
+            fontName="Helvetica", fontSize=6.5, leading=7.1,
+            alignment=TA_LEFT, textColor=CINZA_TEXTO
         ),
-
         "valor_celula": ParagraphStyle(
-            "AFINValorCelula",
-            parent=base["Normal"],
-            fontName="Helvetica",
-            fontSize=6.3,
-            leading=6.8,
-            alignment=TA_CENTER,
-            textColor=CINZA_TEXTO,
+            "AFINValorCelula", parent=base["Normal"],
+            fontName="Helvetica", fontSize=6.3, leading=6.8,
+            alignment=TA_CENTER, textColor=CINZA_TEXTO
         ),
-
-        # ----------------------------------------------------
-        # RODAPÉ
-        # ----------------------------------------------------
-
         "rodape": ParagraphStyle(
-            "AFINRodape",
-            parent=base["Normal"],
-            fontName="Helvetica",
-            fontSize=5.5,
-            leading=6,
-            alignment=TA_LEFT,
-            textColor=CINZA_SECUNDARIO,
+            "AFINRodape", parent=base["Normal"],
+            fontName="Helvetica", fontSize=5.5, leading=6,
+            alignment=TA_LEFT, textColor=CINZA_SECUNDARIO
         ),
     }
 
@@ -965,41 +818,16 @@ def _estilos():
 # ============================================================
 
 def _blocos(colunas):
-    """
-    Divide as colunas acadêmicas em blocos de 21.
-
-    O último bloco recebe colunas vazias quando necessário.
-    Isso mantém a largura e a geometria visual de todas as páginas.
-    """
-
+    """Divide as colunas acadêmicas em blocos de 21."""
     if not colunas:
         return [[None] * COLUNAS_MATRIZ_POR_PAGINA]
-
     saida = []
-
-    for inicio in range(
-        0,
-        len(colunas),
-        COLUNAS_MATRIZ_POR_PAGINA
-    ):
-        bloco = list(
-            colunas[
-                inicio:
-                inicio + COLUNAS_MATRIZ_POR_PAGINA
-            ]
-        )
-
-        quantidade_faltante = (
-            COLUNAS_MATRIZ_POR_PAGINA - len(bloco)
-        )
-
+    for inicio in range(0, len(colunas), COLUNAS_MATRIZ_POR_PAGINA):
+        bloco = list(colunas[inicio:inicio + COLUNAS_MATRIZ_POR_PAGINA])
+        quantidade_faltante = COLUNAS_MATRIZ_POR_PAGINA - len(bloco)
         if quantidade_faltante > 0:
-            bloco.extend(
-                [None] * quantidade_faltante
-            )
-
+            bloco.extend([None] * quantidade_faltante)
         saida.append(bloco)
-
     return saida
 
 
@@ -1008,109 +836,21 @@ def _blocos(colunas):
 # ============================================================
 
 def _topo(largura, st):
-    """
-    Cabeçalho institucional minimalista.
-
-    Não utiliza uma grande caixa colorida.
-    """
-
-    largura_linha = largura
-
     dados = [
-        [
-            Paragraph(
-                "SECRETARIA DE ESTADO DE EDUCAÇÃO DO DISTRITO FEDERAL",
-                st["instituicao"],
-            )
-        ],
-        [
-            Paragraph(
-                "CEP – ESCOLA TÉCNICA DE PLANALTINA",
-                st["titulo"],
-            )
-        ],
-        [
-            Paragraph(
-                "AFIN — ACOMPANHAMENTO DA FREQUÊNCIA E CONCEITO",
-                st["subtitulo"],
-            )
-        ],
+        [Paragraph("SECRETARIA DE ESTADO DE EDUCAÇÃO DO DISTRITO FEDERAL", st["instituicao"])],
+        [Paragraph("CEP – ESCOLA TÉCNICA DE PLANALTINA", st["titulo"])],
+        [Paragraph("AFIN — ACOMPANHAMENTO DA FREQUÊNCIA E CONCEITO", st["subtitulo"])],
     ]
-
-    tabela = Table(
-        dados,
-        colWidths=[largura_linha],
-        rowHeights=[
-            4.2 * mm,
-            4.8 * mm,
-            3.8 * mm,
-        ],
-        hAlign="LEFT",
-    )
-
-    tabela.setStyle(
-        TableStyle(
-            [
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (-1, -1),
-                    BRANCO,
-                ),
-
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "MIDDLE",
-                ),
-
-                (
-                    "ALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "CENTER",
-                ),
-
-                (
-                    "LEFTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    0,
-                ),
-
-                (
-                    "RIGHTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    0,
-                ),
-
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    0,
-                ),
-
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    0,
-                ),
-
-                (
-                    "LINEBELOW",
-                    (0, 2),
-                    (-1, 2),
-                    0.8,
-                    AZUL_INSTITUCIONAL,
-                ),
-            ]
-        )
-    )
-
+    tabela = Table(dados, colWidths=[largura], rowHeights=[4.2 * mm, 4.8 * mm, 3.8 * mm], hAlign="LEFT")
+    tabela.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), AZUL_HEADER_PRINCIPAL),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
     return tabela
 
 
@@ -1119,98 +859,24 @@ def _topo(largura, st):
 # ============================================================
 
 def _identificacao(largura, turma, semestre, st):
-    """
-    Identificação compacta da turma e semestre.
-    """
-
     metade = largura / 2
-
-    dados = [
-        [
-            Paragraph("TURMA", st["label"]),
-            Paragraph(_html(turma), st["valor"]),
-            Paragraph("SEMESTRE", st["label"]),
-            Paragraph(_html(semestre), st["valor"]),
-        ]
-    ]
-
-    larguras = [
-        15 * mm,
-        metade - 15 * mm,
-        20 * mm,
-        metade - 20 * mm,
-    ]
-
-    tabela = Table(
-        dados,
-        colWidths=larguras,
-        rowHeights=[7 * mm],
-        hAlign="LEFT",
-    )
-
-    tabela.setStyle(
-        TableStyle(
-            [
-                (
-                    "BACKGROUND",
-                    (0, 0),
-                    (0, 0),
-                    AZUL_MUITO_CLARO,
-                ),
-
-                (
-                    "BACKGROUND",
-                    (2, 0),
-                    (2, 0),
-                    AZUL_MUITO_CLARO,
-                ),
-
-                (
-                    "LINEBELOW",
-                    (0, 0),
-                    (-1, 0),
-                    0.4,
-                    CINZA_LINHA,
-                ),
-
-                (
-                    "VALIGN",
-                    (0, 0),
-                    (-1, -1),
-                    "MIDDLE",
-                ),
-
-                (
-                    "LEFTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    2.5,
-                ),
-
-                (
-                    "RIGHTPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    2.5,
-                ),
-
-                (
-                    "TOPPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    0.5,
-                ),
-
-                (
-                    "BOTTOMPADDING",
-                    (0, 0),
-                    (-1, -1),
-                    0.5,
-                ),
-            ]
-        )
-    )
-
+    dados = [[
+        Paragraph("TURMA", st["label"]),
+        Paragraph(_html(turma), st["valor"]),
+        Paragraph("SEMESTRE", st["label"]),
+        Paragraph(_html(semestre), st["valor"]),
+    ]]
+    larguras = [15 * mm, metade - 15 * mm, 20 * mm, metade - 20 * mm]
+    tabela = Table(dados, colWidths=larguras, rowHeights=[7 * mm], hAlign="LEFT")
+    tabela.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), AMARELO_UC_HEADER),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, CINZA_LINHA),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.5),
+    ]))
     return tabela
 
 
@@ -1218,444 +884,100 @@ def _identificacao(largura, turma, semestre, st):
 # CABEÇALHO DA MATRIZ
 # ============================================================
 
-def _cabecalho(
-    bloco,
-    mapa,
-    wm,
-    wn,
-    wc,
-    st,
-):
-    """
-    Constrói as três linhas do cabeçalho:
+def _cabecalho(bloco, mapa, wm, wn, wc, st):
+    linha_uc = [Paragraph("MATRÍCULA", st["matricula_header"]), Paragraph("ESTUDANTE", st["estudante_header"])]
+    linha_iduc = [Paragraph("", st["matricula_header"]), Paragraph("", st["estudante_header"])]
+    linha_indicador = [Paragraph("", st["matricula_header"]), Paragraph("", st["estudante_header"])]
 
-    Linha 1 = UC
-    Linha 2 = IDUC
-    Linha 3 = F/C
-    """
-
-    linha_uc = [
-        Paragraph(
-            "MATRÍCULA",
-            st["matricula_header"],
-        ),
-        Paragraph(
-            "ESTUDANTE",
-            st["estudante_header"],
-        ),
-    ]
-
-    linha_iduc = [
-        Paragraph("", st["matricula_header"]),
-        Paragraph("", st["estudante_header"]),
-    ]
-
-    linha_indicador = [
-        Paragraph("", st["matricula_header"]),
-        Paragraph("", st["estudante_header"]),
-    ]
-
-    larguras = [
-        wm,
-        wn,
-    ]
+    larguras = [wm, wn]
 
     for nome_coluna in bloco:
-
         larguras.append(wc)
-
         if nome_coluna is None:
-
-            linha_uc.append(
-                Paragraph("", st["uc"])
-            )
-
-            linha_iduc.append(
-                Paragraph("", st["iduc"])
-            )
-
-            linha_indicador.append(
-                Paragraph("", st["indicador"])
-            )
-
+            linha_uc.append(Paragraph("", st["uc"]))
+            linha_iduc.append(Paragraph("", st["iduc"]))
+            linha_indicador.append(Paragraph("", st["indicador"]))
             continue
 
         uc = _nome_uc(nome_coluna)
+        iduc = mapa.get(_normalizar(uc), "")
+        tipo = _tipo_coluna(nome_coluna)
 
-        iduc = mapa.get(
-            _normalizar(uc),
-            "",
-        )
+        linha_uc.append(Paragraph(_html(uc), st["uc"]))
+        linha_iduc.append(Paragraph(_html(iduc), st["iduc"]))
 
-        tipo = _tipo_coluna(
-            nome_coluna
-        )
+        indicador = "F" if tipo == "FAL" else ("C" if tipo == "CON" else "")
+        linha_indicador.append(Paragraph(indicador, st["indicador"]))
 
-        linha_uc.append(
-            Paragraph(
-                _html(uc),
-                st["uc"],
-            )
-        )
-
-        linha_iduc.append(
-            Paragraph(
-                _html(iduc),
-                st["iduc"],
-            )
-        )
-
-        indicador = ""
-
-        if tipo == "FAL":
-            indicador = "F"
-
-        elif tipo == "CON":
-            indicador = "C"
-
-        linha_indicador.append(
-            Paragraph(
-                indicador,
-                st["indicador"],
-            )
-        )
-
-    return [
-        linha_uc,
-        linha_iduc,
-        linha_indicador,
-    ], larguras
+    return [linha_uc, linha_iduc, linha_indicador], larguras
 
 
 # ============================================================
 # TABELA PRINCIPAL
 # ============================================================
 
-def _tabela(
-    df,
-    bloco,
-    mapa,
-    wm,
-    wn,
-    wc,
-    st,
-):
-    """
-    Constrói a tabela acadêmica.
-
-    A estratégia visual é:
-    - cabeçalho forte;
-    - corpo branco;
-    - zebra extremamente discreta;
-    - poucas linhas;
-    - ausência de grades verticais excessivas.
-    """
-
-    cabecalho, larguras = _cabecalho(
-        bloco,
-        mapa,
-        wm,
-        wn,
-        wc,
-        st,
-    )
-
-    posicoes = {
-        coluna: indice
-        for indice, coluna
-        in enumerate(df.columns)
-    }
-
+def _tabela(df, bloco, mapa, wm, wn, wc, st):
+    cabecalho, larguras = _cabecalho(bloco, mapa, wm, wn, wc, st)
+    posicoes = {coluna: indice for indice, coluna in enumerate(df.columns)}
     linhas = list(cabecalho)
 
-    # --------------------------------------------------------
-    # CORPO
-    # --------------------------------------------------------
-
     for _, row in df.iterrows():
-
         linha = [
-            Paragraph(
-                _html(row.iloc[0]),
-                st["matricula"],
-            ),
-
-            Paragraph(
-                _html(row.iloc[1]),
-                st["nome"],
-            ),
+            Paragraph(_html(row.iloc[0]), st["matricula"]),
+            Paragraph(_html(row.iloc[1]), st["nome"]),
         ]
-
         for coluna in bloco:
-
             if coluna is None:
                 valor = ""
-
             else:
-                valor = _texto(
-                    row.iloc[
-                        posicoes[coluna]
-                    ]
-                )
-
-            linha.append(
-                Paragraph(
-                    _html(valor),
-                    st["valor_celula"],
-                )
-            )
-
+                valor = _texto(row.iloc[posicoes[coluna]])
+            linha.append(Paragraph(_html(valor), st["valor_celula"]))
         linhas.append(linha)
 
-    tabela = Table(
-        linhas,
-        colWidths=larguras,
-        repeatRows=3,
-        hAlign="LEFT",
-    )
+    tabela = Table(linhas, colWidths=larguras, repeatRows=3, hAlign="LEFT")
 
     comandos = [
+        # Cabeçalhos
+        ("BACKGROUND", (0, 0), (1, 2), AZUL_HEADER_PRINCIPAL),
+        ("BACKGROUND", (2, 0), (-1, 0), AMARELO_UC_HEADER),
+        ("BACKGROUND", (2, 1), (-1, 1), BRANCO),
+        ("BACKGROUND", (2, 2), (-1, 2), AMARELO_UC_HEADER),
 
-        # ----------------------------------------------------
-        # CABEÇALHO — MATRÍCULA / ESTUDANTE
-        # ----------------------------------------------------
+        # Corpo dos Dados
+        ("BACKGROUND", (0, 3), (-1, -1), FUNDO_DADOS),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("ALIGN", (1, 3), (1, -1), "LEFT"),
 
-        (
-            "BACKGROUND",
-            (0, 0),
-            (1, 2),
-            AZUL_INSTITUCIONAL,
-        ),
+        # Linhas de Divisão
+        ("LINEBELOW", (0, 2), (-1, 2), 0.8, AZUL_HEADER_PRINCIPAL),
+        ("LINEBELOW", (2, 0), (-1, 0), 0.35, CINZA_LINHA),
+        ("LINEBELOW", (2, 1), (-1, 1), 0.3, CINZA_LINHA),
+        ("LINEAFTER", (0, 0), (0, -1), 0.45, CINZA_LINHA),
+        ("LINEAFTER", (1, 0), (1, -1), 0.8, AZUL_HEADER_PRINCIPAL),
 
-        # ----------------------------------------------------
-        # CABEÇALHO — UCs
-        # ----------------------------------------------------
-
-        (
-            "BACKGROUND",
-            (2, 0),
-            (-1, 0),
-            AZUL_MUITO_CLARO,
-        ),
-
-        (
-            "BACKGROUND",
-            (2, 1),
-            (-1, 1),
-            BRANCO,
-        ),
-
-        (
-            "BACKGROUND",
-            (2, 2),
-            (-1, 2),
-            AZUL_SECUNDARIO,
-        ),
-
-        # ----------------------------------------------------
-        # CORPO
-        # ----------------------------------------------------
-
-        (
-            "BACKGROUND",
-            (0, 3),
-            (-1, -1),
-            BRANCO,
-        ),
-
-        # ----------------------------------------------------
-        # ALINHAMENTO
-        # ----------------------------------------------------
-
-        (
-            "VALIGN",
-            (0, 0),
-            (-1, -1),
-            "MIDDLE",
-        ),
-
-        (
-            "ALIGN",
-            (0, 0),
-            (-1, -1),
-            "CENTER",
-        ),
-
-        (
-            "ALIGN",
-            (1, 3),
-            (1, -1),
-            "LEFT",
-        ),
-
-        # ----------------------------------------------------
-        # LINHAS DO CABEÇALHO
-        # ----------------------------------------------------
-
-        (
-            "LINEBELOW",
-            (0, 2),
-            (-1, 2),
-            0.65,
-            AZUL_INSTITUCIONAL,
-        ),
-
-        (
-            "LINEBELOW",
-            (2, 0),
-            (-1, 0),
-            0.35,
-            CINZA_LINHA,
-        ),
-
-        (
-            "LINEBELOW",
-            (2, 1),
-            (-1, 1),
-            0.3,
-            CINZA_LINHA,
-        ),
-
-        # ----------------------------------------------------
-        # SEPARAÇÃO MATRÍCULA / ESTUDANTE / UCs
-        # ----------------------------------------------------
-
-        (
-            "LINEAFTER",
-            (0, 0),
-            (0, -1),
-            0.45,
-            CINZA_LINHA,
-        ),
-
-        (
-            "LINEAFTER",
-            (1, 0),
-            (1, -1),
-            0.8,
-            AZUL_SECUNDARIO,
-        ),
-
-        # ----------------------------------------------------
-        # PADDING
-        # ----------------------------------------------------
-
-        (
-            "TOPPADDING",
-            (0, 0),
-            (-1, -1),
-            1.0,
-        ),
-
-        (
-            "BOTTOMPADDING",
-            (0, 0),
-            (-1, -1),
-            1.0,
-        ),
-
-        (
-            "LEFTPADDING",
-            (0, 0),
-            (-1, -1),
-            1.0,
-        ),
-
-        (
-            "RIGHTPADDING",
-            (0, 0),
-            (-1, -1),
-            1.0,
-        ),
+        # Padding Ajustado
+        ("TOPPADDING", (0, 0), (-1, -1), 1.0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.0),
     ]
 
-    # --------------------------------------------------------
-    # ZEBRA DISCRETA
-    # --------------------------------------------------------
-    #
-    # Não usamos cor por FAL/CON.
-    # A diferenciação ocorre pela posição e pelo cabeçalho.
-    #
-
+    # Zebra Discreta em Creme
     quantidade_linhas = len(linhas)
+    for indice in range(3, quantidade_linhas):
+        if (indice - 3) % 2 == 1:
+            comandos.append(("BACKGROUND", (0, indice), (-1, indice), CINZA_ZEBRA))
+        comandos.append(("LINEBELOW", (0, indice), (-1, indice), 0.22, CINZA_LINHA_SUAVE))
 
-    for indice in range(
-        3,
-        quantidade_linhas,
-    ):
-
-        numero_linha = indice - 3
-
-        if numero_linha % 2 == 1:
-
-            comandos.append(
-                (
-                    "BACKGROUND",
-                    (0, indice),
-                    (-1, indice),
-                    CINZA_ZEBRA,
-                )
-            )
-
-    # --------------------------------------------------------
-    # LINHAS HORIZONTAIS DISCRETAS
-    # --------------------------------------------------------
-
-    for indice in range(
-        3,
-        quantidade_linhas,
-    ):
-
-        comandos.append(
-            (
-                "LINEBELOW",
-                (0, indice),
-                (-1, indice),
-                0.22,
-                CINZA_LINHA_SUAVE,
-            )
-        )
-
-    # --------------------------------------------------------
-    # DIVISÃO SUAVE ENTRE CADA PAR F/C
-    # --------------------------------------------------------
-    #
-    # Mantemos alguma orientação visual sem transformar
-    # cada célula em uma caixa.
-    #
-
-    for posicao, coluna in enumerate(
-        bloco,
-        start=2,
-    ):
-
+    # Divisão entre os pares F/C
+    for posicao, coluna in enumerate(bloco, start=2):
         if coluna is None:
             continue
+        if _tipo_coluna(coluna) == "CON":
+            comandos.append(("LINEAFTER", (posicao, 0), (posicao, -1), 0.35, CINZA_LINHA))
 
-        tipo = _tipo_coluna(
-            coluna
-        )
-
-        if tipo == "CON":
-
-            comandos.append(
-                (
-                    "LINEAFTER",
-                    (posicao, 0),
-                    (posicao, -1),
-                    0.35,
-                    CINZA_LINHA,
-                )
-            )
-
-    # --------------------------------------------------------
-    # APLICAÇÃO
-    # --------------------------------------------------------
-
-    tabela.setStyle(
-        TableStyle(comandos)
-    )
-
+    tabela.setStyle(TableStyle(comandos))
     return tabela
 
 
@@ -1664,414 +986,104 @@ def _tabela(
 # ============================================================
 
 def _rodape(canvas, doc):
-    """
-    Rodapé extremamente discreto.
-    """
-
     canvas.saveState()
-
     largura_pagina, _ = landscape(A4)
-
     y = 5.0 * mm
 
-    # Linha muito fina
-    canvas.setStrokeColor(
-        CINZA_LINHA
-    )
-
+    canvas.setStrokeColor(CINZA_LINHA)
     canvas.setLineWidth(0.3)
+    canvas.line(MARGEM_ESQ, y + 3.2 * mm, largura_pagina - MARGEM_DIR, y + 3.2 * mm)
 
-    canvas.line(
-        MARGEM_ESQ,
-        y + 3.2 * mm,
-        largura_pagina - MARGEM_DIR,
-        y + 3.2 * mm,
-    )
-
-    # Texto esquerdo
-    canvas.setFont(
-        "Helvetica",
-        5.4,
-    )
-
-    canvas.setFillColor(
-        CINZA_SECUNDARIO
-    )
-
-    canvas.drawString(
-        MARGEM_ESQ,
-        y,
-        "CEP ETP • AFIN",
-    )
-
-    # Página
-    canvas.drawRightString(
-        largura_pagina - MARGEM_DIR,
-        y,
-        f"Página {doc.page}",
-    )
+    canvas.setFont("Helvetica", 5.4)
+    canvas.setFillColor(CINZA_SECUNDARIO)
+    canvas.drawString(MARGEM_ESQ, y, "CEP ETP • AFIN")
+    canvas.drawRightString(largura_pagina - MARGEM_DIR, y, f"Página {doc.page}")
 
     canvas.restoreState()
 
 
 # ============================================================
-# LIMPEZA E PREPARAÇÃO DO DATAFRAME
+# PREPARAÇÃO DO DATAFRAME E FUNÇÃO PRINCIPAL
 # ============================================================
 
 def _preparar_dataframe(df_matriz):
-    """
-    Faz uma cópia segura do DataFrame e garante
-    nomes de colunas utilizáveis.
-
-    Não altera o DataFrame original recebido pelo Streamlit.
-    """
-
     if df_matriz is None:
         return pd.DataFrame()
-
-    if not isinstance(
-        df_matriz,
-        pd.DataFrame,
-    ):
-        raise TypeError(
-            "df_matriz deve ser um pandas.DataFrame."
-        )
+    if not isinstance(df_matriz, pd.DataFrame):
+        raise TypeError("df_matriz deve ser um pandas.DataFrame.")
 
     df = df_matriz.copy()
-
     if df.empty:
         return df
 
     if len(df.columns) < 2:
-        raise ValueError(
-            "A matriz deve possuir pelo menos "
-            "Matrícula e Estudante."
-        )
-
-    # --------------------------------------------------------
-    # Garantir que os dois primeiros campos tenham nomes
-    # --------------------------------------------------------
+        raise ValueError("A matriz deve possuir pelo menos Matrícula e Estudante.")
 
     colunas = list(df.columns)
-
     if not _texto(colunas[0]):
         colunas[0] = "Matrícula"
-
     if not _texto(colunas[1]):
         colunas[1] = "Estudante"
-
     df.columns = colunas
-
     return df
 
 
-# ============================================================
-# FUNÇÃO PRINCIPAL
-# ============================================================
-
-def gerar_pdf_afin(
-    df_matriz,
-    turma,
-    semestre,
-    mapa_nomes_iduc=None,
-):
-    """
-    Gera o PDF consolidado da Matriz AFIN.
-
-    Parâmetros
-    ----------
-    df_matriz : pandas.DataFrame
-        DataFrame contendo:
-        - coluna 0 = Matrícula
-        - coluna 1 = Estudante
-        - demais colunas = dados das UCs
-
-    turma : str
-        Identificação da turma.
-
-    semestre : str
-        Semestre acadêmico.
-
-    mapa_nomes_iduc : dict, opcional
-        Mapa no formato:
-            {iduc: nome_uc}
-
-    Retorno
-    -------
-    bytes
-        Conteúdo binário do PDF.
-    """
-
-    # --------------------------------------------------------
-    # PREPARAÇÃO
-    # --------------------------------------------------------
-
-    df = _preparar_dataframe(
-        df_matriz
-    )
-
+def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
+    """Gera o PDF consolidado da Matriz AFIN."""
+    df = _preparar_dataframe(df_matriz)
     buffer = io.BytesIO()
-
     pagina = landscape(A4)
-
     largura_pagina, altura_pagina = pagina
-
-    largura_util = (
-        largura_pagina
-        - MARGEM_ESQ
-        - MARGEM_DIR
-    )
-
-    # --------------------------------------------------------
-    # DOCUMENTO
-    # --------------------------------------------------------
+    largura_util = largura_pagina - MARGEM_ESQ - MARGEM_DIR
 
     doc = SimpleDocTemplate(
-        buffer,
-        pagesize=pagina,
-
-        leftMargin=MARGEM_ESQ,
-        rightMargin=MARGEM_DIR,
-
-        topMargin=MARGEM_SUP,
-        bottomMargin=MARGEM_INF,
-
-        title="Matriz AFIN",
-        author=(
-            "CEP ETP — "
-            "Escola Técnica de Planaltina"
-        ),
-
-        subject=(
-            "Acompanhamento da Frequência "
-            "e Conceito"
-        ),
-
-        creator="CEP ETP",
+        buffer, pagesize=pagina,
+        leftMargin=MARGEM_ESQ, rightMargin=MARGEM_DIR,
+        topMargin=MARGEM_SUP, bottomMargin=MARGEM_INF,
+        title="Matriz AFIN", author="CEP ETP — Escola Técnica de Planaltina",
+        subject="Acompanhamento da Frequência e Conceito", creator="CEP ETP",
     )
-
-    # --------------------------------------------------------
-    # ESTILOS
-    # --------------------------------------------------------
 
     st = _estilos()
+    mapa = _mapa_iduc(mapa_nomes_iduc)
+    colunas = [] if df.empty else list(df.columns[2:])
+    blocos = _blocos(colunas)
 
-    # --------------------------------------------------------
-    # MAPA IDUC
-    # --------------------------------------------------------
-
-    mapa = _mapa_iduc(
-        mapa_nomes_iduc
-    )
-
-    # --------------------------------------------------------
-    # COLUNAS ACADÊMICAS
-    # --------------------------------------------------------
-
-    if df.empty:
-
-        colunas = []
-
-    else:
-
-        colunas = list(
-            df.columns[2:]
-        )
-
-    # --------------------------------------------------------
-    # BLOCOS DE 21 COLUNAS
-    # --------------------------------------------------------
-
-    blocos = _blocos(
-        colunas
-    )
-
-    # --------------------------------------------------------
-    # LARGURA DAS COLUNAS
-    # --------------------------------------------------------
-
-    largura_restante = (
-        largura_util
-        - LARGURA_MATRICULA
-        - LARGURA_ESTUDANTE
-    )
-
-    largura_coluna = (
-        largura_restante
-        / COLUNAS_MATRIZ_POR_PAGINA
-    )
-
-    # --------------------------------------------------------
-    # STORY
-    # --------------------------------------------------------
+    largura_restante = largura_util - LARGURA_MATRICULA - LARGURA_ESTUDANTE
+    largura_coluna = largura_restante / COLUNAS_MATRIZ_POR_PAGINA
 
     story = []
 
-    for numero_bloco, bloco in enumerate(
-        blocos,
-        start=1,
-    ):
-
-        # ----------------------------------------------------
-        # NOVA PÁGINA
-        # ----------------------------------------------------
-
+    for numero_bloco, bloco in enumerate(blocos, start=1):
         if numero_bloco > 1:
-            story.append(
-                PageBreak()
-            )
+            story.append(PageBreak())
 
-        # ----------------------------------------------------
-        # CABEÇALHO
-        # ----------------------------------------------------
-
-        story.append(
-            _topo(
-                largura_util,
-                st,
-            )
-        )
-
-        story.append(
-            Spacer(
-                1,
-                1.6 * mm,
-            )
-        )
-
-        # ----------------------------------------------------
-        # IDENTIFICAÇÃO
-        # ----------------------------------------------------
-
-        story.append(
-            _identificacao(
-                largura_util,
-                turma,
-                semestre,
-                st,
-            )
-        )
-
-        story.append(
-            Spacer(
-                1,
-                1.7 * mm,
-            )
-        )
-
-        # ----------------------------------------------------
-        # TABELA
-        # ----------------------------------------------------
+        story.append(_topo(largura_util, st))
+        story.append(Spacer(1, 1.6 * mm))
+        story.append(_identificacao(largura_util, turma, semestre, st))
+        story.append(Spacer(1, 1.7 * mm))
 
         if df.empty:
-
-            tabela_vazia = Table(
-                [
-                    [
-                        Paragraph(
-                            "Nenhum registro disponível.",
-                            st["nome"],
-                        )
-                    ]
-                ],
-                colWidths=[
-                    largura_util
-                ],
-            )
-
-            tabela_vazia.setStyle(
-                TableStyle(
-                    [
-                        (
-                            "ALIGN",
-                            (0, 0),
-                            (-1, -1),
-                            "CENTER",
-                        ),
-
-                        (
-                            "VALIGN",
-                            (0, 0),
-                            (-1, -1),
-                            "MIDDLE",
-                        ),
-
-                        (
-                            "TOPPADDING",
-                            (0, 0),
-                            (-1, -1),
-                            8,
-                        ),
-
-                        (
-                            "BOTTOMPADDING",
-                            (0, 0),
-                            (-1, -1),
-                            8,
-                        ),
-
-                        (
-                            "TEXTCOLOR",
-                            (0, 0),
-                            (-1, -1),
-                            CINZA_SECUNDARIO,
-                        ),
-                    ]
-                )
-            )
-
-            story.append(
-                tabela_vazia
-            )
-
+            tabela_vazia = Table([[Paragraph("Nenhum registro disponível.", st["nome"])]], colWidths=[largura_util])
+            tabela_vazia.setStyle(TableStyle([
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("TEXTCOLOR", (0, 0), (-1, -1), CINZA_SECUNDARIO),
+            ]))
+            story.append(tabela_vazia)
         else:
+            story.append(_tabela(df, bloco, mapa, LARGURA_MATRICULA, LARGURA_ESTUDANTE, largura_coluna, st))
 
-            story.append(
-                _tabela(
-                    df,
-                    bloco,
-                    mapa,
-                    LARGURA_MATRICULA,
-                    LARGURA_ESTUDANTE,
-                    largura_coluna,
-                    st,
-                )
-            )
-
-    # --------------------------------------------------------
-    # CONSTRUÇÃO
-    # --------------------------------------------------------
-
-    doc.build(
-        story,
-        onFirstPage=_rodape,
-        onLaterPages=_rodape,
-    )
-
+    doc.build(story, onFirstPage=_rodape, onLaterPages=_rodape)
     buffer.seek(0)
-
     return buffer.getvalue()
 
 
-# ============================================================
-# RELATÓRIO DE TURMA
-# ============================================================
-
 def gerar_pdf_relatorio_turma(dados):
-    """
-    Função auxiliar mantida para compatibilidade
-    com outras partes do sistema.
-
-    Esta função ainda é um placeholder.
-    """
-
+    """Função auxiliar mantida para compatibilidade com relatórios da turma."""
     buffer = io.BytesIO()
-
-    buffer.write(
-        b"%PDF-1.4\n"
-        b"% Relatorio da Turma em desenvolvimento\n"
-    )
-
+    buffer.write(b"%PDF-1.4\n% Relatorio da Turma em desenvolvimento\n")
     buffer.seek(0)
-
     return buffer.getvalue()
