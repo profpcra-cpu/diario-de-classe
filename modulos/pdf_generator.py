@@ -1772,33 +1772,35 @@ def gerar_pdf_passe_estudantil(dados_aluno):
 
 
 
-import io
-import pypdf  # Biblioteca responsável por juntar os PDFs
 
-# ... (as suas outras funções de geração de PDF individuais, como gerar_pdf_passe_estudantil)
+import io
+from pypdf import PdfReader, PdfWriter
+
 
 def gerar_pdf_passes_turma_unificado(df_turma_alunos):
     """
     Gera um único documento PDF consolidado contendo o passe estudantil 
-    de todos os alunos da turma, um após o outro.
+    de todos os alunos da turma, unindo página por página.
     """
-    merger = pypdf.PdfMerger()
+    writer = PdfWriter()
     
     for _, aluno in df_turma_alunos.iterrows():
         dados_dict = aluno.to_dict()
         
-        # 1. Gera o PDF individual do aluno em formato de bytes
+        # 1. Gera o PDF individual do aluno em bytes
         pdf_bytes = gerar_pdf_passe_estudantil(dados_dict)
         
-        # 2. Converte os bytes para um objeto de leitura em memória e adiciona ao unificador
+        # 2. Lê as páginas do PDF gerado e adiciona-as ao escritor unificado
         pdf_file_like = io.BytesIO(pdf_bytes)
-        merger.append(pdf_file_like)
+        reader = PdfReader(pdf_file_like)
         
-    # 3. Consolida todas as páginas num único buffer final
+        for page in reader.pages:
+            writer.add_page(page)
+            
+    # 3. Escreve o resultado final num buffer de memória
     output_buffer = io.BytesIO()
-    merger.write(output_buffer)
-    merger.close()
+    writer.write(output_buffer)
+    writer.close()
     
     output_buffer.seek(0)
     return output_buffer.getvalue()
-
