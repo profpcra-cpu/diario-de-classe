@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import base64
 
 # 1. Configuração da página e layout
 st.set_page_config(
@@ -9,20 +10,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Estilização CSS Customizada (Modern Clean UI & Logo Balancing)
+# 2. Estilização CSS Customizada (Ajuste das Logos e Harmonia Visual)
 st.markdown("""
     <style>
-    /* Estilo do container principal */
     .main {
         background-color: #f8f9fa;
     }
     
-    /* Contêiner de Logos Institucionais na Sidebar (Harmonização Visual) */
+    /* Contêiner de Logos da Sidebar */
     .brand-container {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 12px 8px;
+        padding: 12px 10px;
         display: flex;
         align-items: center;
         justify-content: space-evenly;
@@ -30,8 +30,16 @@ st.markdown("""
         margin-bottom: 15px;
     }
     
-    .brand-logo {
-        max-height: 65px;
+    /* Logo Venturis Ventis (Brasão) na Sidebar */
+    .logo-gdf-sb {
+        max-height: 62px;
+        width: auto;
+        object-fit: contain;
+    }
+    
+    /* Logo CEP / ETP Circular na Sidebar */
+    .logo-escola-sb {
+        max-height: 54px;
         width: auto;
         object-fit: contain;
     }
@@ -41,21 +49,27 @@ st.markdown("""
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 10px 16px;
+        padding: 8px 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 15px;
+        gap: 16px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.03);
     }
     
-    .header-logo {
-        max-height: 60px;
+    .header-logo-gdf {
+        max-height: 58px;
+        width: auto;
+        object-fit: contain;
+    }
+
+    .header-logo-escola {
+        max-height: 50px;
         width: auto;
         object-fit: contain;
     }
     
-    /* Estilo dos Cards do Dashboard */
+    /* Cards Métricos */
     .metric-card {
         background-color: #ffffff;
         border-radius: 10px;
@@ -102,8 +116,7 @@ if not verificar_sessao():
     renderizar_login()
     st.stop()
 
-# Helper para ler imagem e converter em Base64 para exibição no HTML
-import base64
+# Converter imagens em Base64 para injeção HTML
 def get_image_base64(path):
     if os.path.exists(path):
         with open(path, "rb") as image_file:
@@ -114,16 +127,16 @@ def get_image_base64(path):
 img_escola = get_image_base64("logo_escola.png")
 img_gdf = get_image_base64("logo_gdf.png")
 
-# --- SIDEBAR (BARRA LATERAL REORGANIZADA) ---
+# --- SIDEBAR (BARRA LATERAL) ---
 with st.sidebar:
-    # Card de Logos com Balanço Visual via CSS Flexbox
-    if img_escola or img_gdf:
-        logo_escola_html = f'<img src="{img_escola}" class="brand-logo" alt="Escola">' if img_escola else ''
-        logo_gdf_html = f'<img src="{img_gdf}" class="brand-logo" alt="GDF">' if img_gdf else ''
+    # Card de Logos com Venturis Ventis (img_gdf) PRIMEIRO
+    if img_gdf or img_escola:
+        logo_gdf_html = f'<img src="{img_gdf}" class="logo-gdf-sb" alt="Venturis Ventis">' if img_gdf else ''
+        logo_escola_html = f'<img src="{img_escola}" class="logo-escola-sb" alt="Escola">' if img_escola else ''
         st.markdown(f'''
             <div class="brand-container">
-                {logo_escola_html}
                 {logo_gdf_html}
+                {logo_escola_html}
             </div>
         ''', unsafe_allow_html=True)
     
@@ -141,7 +154,7 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("📌 Navegação Principal")
     
-    # Menu reorganizado por Categorias Claras
+    # Menu de Opções
     opcoes_menu = [
         "🏠 Painel Inicial",
         "👥 Alunos e Pessoas",
@@ -160,19 +173,19 @@ with st.sidebar:
 
 # --- ÁREA DE CONTEÚDO PRINCIPAL ---
 
-# CABEÇALHO SUPERIOR DA PÁGINA (COM CARD INSTITUCIONAL HARMONIZADO)
+# CABEÇALHO SUPERIOR (Venturis Ventis em primeiro lugar)
 col_head1, col_head2 = st.columns([3, 1])
 with col_head1:
     st.title("Sistema de Gestão Escolar — DDC")
     st.caption("Centro de Educação Profissional — Escola Técnica de Planaltina (CEP-ETP)")
 with col_head2:
-    if img_escola or img_gdf:
-        l_escola = f'<img src="{img_escola}" class="header-logo">' if img_escola else ''
-        l_gdf = f'<img src="{img_gdf}" class="header-logo">' if img_gdf else ''
+    if img_gdf or img_escola:
+        l_gdf = f'<img src="{img_gdf}" class="header-logo-gdf">' if img_gdf else ''
+        l_escola = f'<img src="{img_escola}" class="header-logo-escola">' if img_escola else ''
         st.markdown(f'''
             <div class="header-brand-container">
-                {l_escola}
                 {l_gdf}
+                {l_escola}
             </div>
         ''', unsafe_allow_html=True)
 
@@ -184,7 +197,7 @@ if menu_selecionado == "🏠 Painel Inicial":
     st.subheader("👋 Bem-vindo ao Diário de Classe Eletrónico")
     st.markdown("Selecione um módulo no menu lateral para iniciar as suas atividades ou consulte os destaques rápidos abaixo:")
     
-    # CARDS DE VISÃO GERAL (DASHBOARD MODERNIZADO)
+    # CARDS DE VISÃO GERAL
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.markdown("""
@@ -217,7 +230,6 @@ if menu_selecionado == "🏠 Painel Inicial":
 
     st.markdown("---")
     
-    # Acesso Rápido / Destaques
     col_dash1, col_dash2 = st.columns(2)
     with col_dash1:
         st.info("💡 **Dica de Utilização:** Registe diariamente a frequência e o conteúdo programático na aba **Diário e Frequência** para manter os relatórios pedagógicos atualizados.")
