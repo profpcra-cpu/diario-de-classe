@@ -10,41 +10,33 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. Estilização CSS Customizada (Ajuste das Logos e Harmonia Visual)
+# 2. Estilização CSS Customizada (Apenas Logo da Escola)
 st.markdown("""
     <style>
     .main {
         background-color: #f8f9fa;
     }
     
-    /* Contêiner de Logos da Sidebar */
+    /* Contêiner de Logo da Sidebar */
     .brand-container {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 12px 10px;
+        padding: 12px;
         display: flex;
         align-items: center;
-        justify-content: space-evenly;
+        justify-content: center;
         box-shadow: 0 2px 4px rgba(0,0,0,0.03);
         margin-bottom: 15px;
     }
     
-    /* Logo Venturis Ventis (Brasão) na Sidebar */
-    .logo-gdf-sb {
-        max-height: 62px;
-        width: auto;
-        object-fit: contain;
-    }
-    
-    /* Logo CEP / ETP Circular na Sidebar */
     .logo-escola-sb {
-        max-height: 54px;
+        max-height: 80px;
         width: auto;
         object-fit: contain;
     }
     
-    /* Contêiner de Logos do Cabeçalho Superior */
+    /* Contêiner de Logo do Cabeçalho Superior */
     .header-brand-container {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
@@ -53,18 +45,11 @@ st.markdown("""
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 16px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.03);
-    }
-    
-    .header-logo-gdf {
-        max-height: 58px;
-        width: auto;
-        object-fit: contain;
     }
 
     .header-logo-escola {
-        max-height: 50px;
+        max-height: 65px;
         width: auto;
         object-fit: contain;
     }
@@ -116,7 +101,7 @@ if not verificar_sessao():
     renderizar_login()
     st.stop()
 
-# Converter imagens em Base64 para injeção HTML
+# Converter imagem da escola em Base64 para injeção HTML
 def get_image_base64(path):
     if os.path.exists(path):
         with open(path, "rb") as image_file:
@@ -125,18 +110,14 @@ def get_image_base64(path):
     return None
 
 img_escola = get_image_base64("logo_escola.png")
-img_gdf = get_image_base64("logo_gdf.png")
 
 # --- SIDEBAR (BARRA LATERAL) ---
 with st.sidebar:
-    # Card de Logos com Venturis Ventis (img_gdf) PRIMEIRO
-    if img_gdf or img_escola:
-        logo_gdf_html = f'<img src="{img_gdf}" class="logo-gdf-sb" alt="Venturis Ventis">' if img_gdf else ''
-        logo_escola_html = f'<img src="{img_escola}" class="logo-escola-sb" alt="Escola">' if img_escola else ''
+    # Apenas Logo da Escola
+    if img_escola:
         st.markdown(f'''
             <div class="brand-container">
-                {logo_gdf_html}
-                {logo_escola_html}
+                <img src="{img_escola}" class="logo-escola-sb" alt="Escola Técnico-Profissional">
             </div>
         ''', unsafe_allow_html=True)
     
@@ -173,19 +154,16 @@ with st.sidebar:
 
 # --- ÁREA DE CONTEÚDO PRINCIPAL ---
 
-# CABEÇALHO SUPERIOR (Venturis Ventis em primeiro lugar)
+# CABEÇALHO SUPERIOR (Apenas Logo da Escola)
 col_head1, col_head2 = st.columns([3, 1])
 with col_head1:
     st.title("Sistema de Gestão Escolar — DDC")
     st.caption("Centro de Educação Profissional — Escola Técnica de Planaltina (CEP-ETP)")
 with col_head2:
-    if img_gdf or img_escola:
-        l_gdf = f'<img src="{img_gdf}" class="header-logo-gdf">' if img_gdf else ''
-        l_escola = f'<img src="{img_escola}" class="header-logo-escola">' if img_escola else ''
+    if img_escola:
         st.markdown(f'''
             <div class="header-brand-container">
-                {l_gdf}
-                {l_escola}
+                <img src="{img_escola}" class="header-logo-escola" alt="CEP-ETP">
             </div>
         ''', unsafe_allow_html=True)
 
