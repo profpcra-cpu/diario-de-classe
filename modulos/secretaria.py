@@ -1,5 +1,4 @@
 import io
-import zipfile
 import pandas as pd
 import streamlit as st
 
@@ -8,24 +7,8 @@ from modulos.pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
+    gerar_pdf_passes_turma_unificado,  # <--- Importado a função que une todos os passes num único PDF
 )
-
-
-def gerar_zip_passes_turma(df_turma_alunos):
-    """Gera um arquivo ZIP em memória contendo o PDF de passe estudantil de cada aluno da turma."""
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        for _, aluno in df_turma_alunos.iterrows():
-            dados_dict = aluno.to_dict()
-            matricula = str(dados_dict.get("matricula", "desconhecido"))
-            nome = str(dados_dict.get("nome", "aluno")).replace("/", "-")
-            
-            pdf_bytes = gerar_pdf_passe_estudantil(dados_dict)
-            nome_arquivo = f"passe_{matricula}_{nome}.pdf"
-            zip_file.writestr(nome_arquivo, pdf_bytes)
-            
-    zip_buffer.seek(0)
-    return zip_buffer.getvalue()
 
 
 def renderizar_modulo_secretaria():
@@ -201,7 +184,7 @@ def renderizar_modulo_secretaria():
                         else df_historico_aluno
                     )
 
-                    # Emissão Individual
+                    # Emissão Individual de Documentos
                     col_doc1, col_doc2, col_doc3 = st.columns(3)
 
                     with col_doc1:
@@ -241,17 +224,17 @@ def renderizar_modulo_secretaria():
                         )
 
                     # ---------------------------------------------------------
-                    # EMISSÃO EM LOTE POR TURMA (PASSE ESTUDANTIL)
+                    # EMISSÃO UNIFICADA POR TURMA (TODOS OS PASSES NUM SÓ PDF)
                     # ---------------------------------------------------------
                     st.markdown("---")
-                    st.markdown("### 📦 Emissão em Lote (Passe Estudantil por Turma)")
+                    st.markdown("### 📚 Emissão Unificada em Lote (Passe Estudantil por Turma)")
                     
                     turma_atual = dados_dict.get("turma")
                     if turma_atual:
-                        st.info(f"Turma detetada para emissão em lote: **{turma_atual}**")
+                        st.info(f"Turma detetada para emissão unificada: **{turma_atual}**")
                         
-                        if st.button("🚀 Gerar Pacote ZIP com Passes de Toda a Turma", use_container_width=True):
-                            with st.spinner("A gerar documentos para todos os alunos da turma... Por favor, aguarde."):
+                        if st.button("🚀 Gerar PDF Único com Todos os Passes da Turma", use_container_width=True):
+                            with st.spinner("A consolidar os documentos de todos os alunos num único PDF... Por favor, aguarde."):
                                 # Busca todos os registos da turma na base de dados
                                 df_turma = executar_query(
                                     "SELECT * FROM TB_PESSOAS WHERE turma = %s",
@@ -259,14 +242,14 @@ def renderizar_modulo_secretaria():
                                 )
                                 
                                 if df_turma is not None and not df_turma.empty:
-                                    zip_bytes = gerar_zip_passes_turma(df_turma)
-                                    st.success(f"Lote gerado com sucesso! {len(df_turma)} alunos incluídos.")
+                                    pdf_unificado_bytes = gerar_pdf_passes_turma_unificado(df_turma)
+                                    st.success(f"PDF unificado gerado com sucesso! {len(df_turma)} alunos incluídos.")
                                     
                                     st.download_button(
-                                        label=f"📥 Clique aqui para descarregar o ZIP da Turma {turma_atual}",
-                                        data=zip_bytes,
-                                        file_name=f"passes_turma_{str(turma_atual).replace('/', '-')}.zip",
-                                        mime="application/zip",
+                                        label=f"📥 Clique aqui para descarregar o PDF Único da Turma {turma_atual}",
+                                        data=pdf_unificado_bytes,
+                                        file_name=f"passes_unificados_turma_{str(turma_atual).replace('/', '-')}.pdf",
+                                        mime="application/pdf",
                                         use_container_width=True,
                                     )
                                 else:
