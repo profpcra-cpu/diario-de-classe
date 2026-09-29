@@ -2,14 +2,14 @@ import io
 import pandas as pd
 import streamlit as st
 
-from modulos.conexao import executar_query
-from modulos.pdf_generator import (
+from .conexao import executar_query
+from .pdf_generator import (
     gerar_pdf_declaracao_escolaridade,
     gerar_pdf_historico_aluno,
     gerar_pdf_passe_estudantil,
     gerar_pdf_passes_turma_unificado,
-    gerar_pdf_renovacao_matricula,              # <--- Certifique-se de importar esta função
-    gerar_pdf_renovacao_turma_unificado,        # <--- Função para lote da turma (ou equivalente)
+    gerar_pdf_renovacao_matricula,
+    gerar_pdf_renovacao_turma_unificado,
 )
 
 
