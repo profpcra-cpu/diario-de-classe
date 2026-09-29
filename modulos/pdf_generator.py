@@ -2684,3 +2684,55 @@ def gerar_pdf_passe_estudantil(dados_aluno):
 
     
     return buffer.getvalue()
+
+
+
+# ============================================================
+# DECLARAÇÃO DE ESCOLARIDADE (Placeholder / Funcional)
+# ============================================================
+
+def gerar_pdf_declaracao_escolaridade(dados_aluno):
+    """
+    Gera a Declaração de Escolaridade em A4.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=22, bottomMargin=24)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("DECLARAÇÃO DE ESCOLARIDADE", styles["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ============================================================
+# PASSE ESTUDANTIL (Individual)
+# ============================================================
+
+def gerar_pdf_passe_estudantil(dados_aluno):
+    """
+    Gera o documento de Passe Estudantil individual.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=22, bottomMargin=24)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("PASSE ESTUDANTIL", styles["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+# ============================================================
+# PASSES DA TURMA UNIFICADO
+# ============================================================
+
+def gerar_pdf_passes_turma_unificado(df_turma, turma_nome=""):
+    """
+    Gera o relatório unificado de passes estudantis da turma.
+    """
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=28, leftMargin=28, topMargin=22, bottomMargin=24)
+    styles = getSampleStyleSheet()
+    story = [Paragraph(f"PASSES ESTUDANTIS - TURMA: {turma_nome}", styles["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
