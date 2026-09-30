@@ -1037,3 +1037,177 @@ def gerar_pdf_passe_estudantil(dados_aluno):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+
+
+
+
+def gerar_pdf_renovacao_matricula(dados_aluno):
+    def get_dado(dados, *chaves):
+        if not isinstance(dados, dict): return ""
+        for chave in chaves:
+            if chave in dados and dados[chave] is not None:
+                val = str(dados[chave]).strip()
+                if val and val.lower() != "none": return val
+            target = chave.lower().replace(" ", "_").replace(":", "")
+            for k, v in dados.items():
+                if k.lower().replace(" ", "_").replace(":", "") == target and v is not None:
+                    val = str(v).strip()
+                    if val and val.lower() != "none": return val
+        return ""
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=30, bottomMargin=30)
+    story = []
+    styles = getSampleStyleSheet()
+
+    style_header_title = ParagraphStyle("HeaderTitle", fontName="Helvetica-Bold", fontSize=9, alignment=1, leading=11)
+    style_header_sub = ParagraphStyle("HeaderSub", fontName="Helvetica", fontSize=7.5, alignment=1, leading=9)
+    style_doc_title = ParagraphStyle("DocTitle", fontName="Helvetica-Bold", fontSize=11, alignment=1, leading=13)
+    style_label = ParagraphStyle("Label", fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, textColor=colors.HexColor("#333333"))
+    style_val = ParagraphStyle("Val", fontName="Helvetica", fontSize=7.5, leading=9)
+    style_obs = ParagraphStyle("ObsText", fontName="Helvetica", fontSize=7.5, leading=10)
+
+    PAGE_WIDTH = 523
+
+    # Cabeçalho Institucional
+    img_gdf = Image("logo_gdf.png", width=45, height=45) if os.path.exists("logo_gdf.png") else Paragraph("", styles["Normal"])
+    img_escola = Image("logo_escola.png", width=45, height=45) if os.path.exists("logo_escola.png") else Paragraph("", styles["Normal"])
+
+    header_text = [
+        Paragraph("<b>Governo do Distrito Federal</b>", style_header_title),
+        Paragraph("Secretaria de Estado de Educação", style_header_sub),
+        Paragraph("Subsecretaria de Educação Básica", style_header_sub),
+        Paragraph("Coordenação Regional de Ensino de Planaltina", style_header_sub),
+        Paragraph("<b>Centro de Educação Profissional - Escola Técnica de Planaltina</b>", style_header_sub),
+    ]
+
+    tabela_cabecalho = Table([[img_gdf, header_text, img_escola]], colWidths=[55, PAGE_WIDTH - 110, 55])
+    tabela_cabecalho.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    story.append(tabela_cabecalho)
+    story.append(Spacer(1, 4))
+
+    # Título do Documento
+    tabela_titulo = Table([[Paragraph("RENOVAÇÃO DE MATRÍCULA", style_doc_title)]], colWidths=[PAGE_WIDTH])
+    tabela_titulo.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E2E8F0")),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(tabela_titulo)
+    story.append(Spacer(1, 2))
+
+    def celula(rotulo, valor):
+        v = str(valor) if valor and str(valor).lower() != "none" else ""
+        return [Paragraph(rotulo, style_label), Paragraph(f"<b>{v}</b>", style_val)]
+
+    # Extração de dados do aluno
+    curso = get_dado(dados_aluno, "curso")
+    matricula = get_dado(dados_aluno, "matricula", "matricula_aluno")
+    turma = get_dado(dados_aluno, "turma", "turma_turno")
+    nome = get_dado(dados_aluno, "nome", "nome_aluno")
+    sexo = get_dado(dados_aluno, "sexo")
+    data_nascimento = get_dado(dados_aluno, "data_nascimento", "dt_nascimento")
+    nacionalidade = get_dado(dados_aluno, "nacionalidade") or "BRASILEIRA"
+    naturalidade = get_dado(dados_aluno, "naturalidade", "cidade")
+    uf = get_dado(dados_aluno, "uf") or "DF"
+    rg = get_dado(dados_aluno, "rg", "identidade")
+    orgao_expeditor = get_dado(dados_aluno, "org_expedidor", "orgao_expeditor")
+    data_expedicao = get_dado(dados_aluno, "dta_expedicao", "data_expedicao")
+    cpf = get_dado(dados_aluno, "cpf")
+    nome_mae = get_dado(dados_aluno, "nome_mae", "mae")
+    raw_pai = get_dado(dados_aluno, "nome_pai", "pai")
+    nome_pai = "" if raw_pai.lower() in ["não sei", "nao sei", "não informado", "-"] else raw_pai
+    endereco = get_dado(dados_aluno, "endereco")
+    bairro = get_dado(dados_aluno, "bairro")
+    cidade = get_dado(dados_aluno, "cidade") or "PLANALTINA"
+    cep = get_dado(dados_aluno, "cep")
+
+    # Grelha de Dados Cadastrais
+    dados_grid = [
+        [celula("Curso:", curso), "", "", "", "", "", "", ""],
+        [celula("Matrícula:", matricula), "", celula("Turma/ Turno:", turma), "", celula("Nome:", nome), "", "", celula("Sexo:", sexo)],
+        [celula("Data de Nascimento:", data_nascimento), celula("Nacionalidade:", nacionalidade), celula("Naturalidade:", naturalidade), celula("UF:", uf), celula("RG / Identidade:", rg), celula("Org. Exp.:", orgao_expeditor), celula("Data Exp.:", data_expedicao), celula("CPF:", cpf)],
+        [celula("Nome da Mãe:", nome_mae), "", "", "", "", "", "", ""],
+        [celula("Nome do Pai:", nome_pai), "", "", "", "", "", "", ""],
+        [celula("Endereço:", endereco), "", "", "", celula("Bairro:", bairro), "", "", ""],
+        [celula("Cidade:", cidade), "", celula("UF:", uf), "", celula("CEP:", cep), "", "", ""]
+    ]
+
+    tabela_dados = Table(dados_grid, colWidths=[70, 70, 70, 35, 105, 50, 64, 59])
+    tabela_dados.setStyle(TableStyle([
+        ("SPAN", (0, 0), (7, 0)),
+        ("SPAN", (0, 1), (1, 1)), ("SPAN", (2, 1), (3, 1)), ("SPAN", (4, 1), (6, 1)),
+        ("SPAN", (0, 3), (7, 3)),
+        ("SPAN", (0, 4), (7, 4)),
+        ("SPAN", (0, 5), (3, 5)), ("SPAN", (4, 5), (7, 5)),
+        ("SPAN", (0, 6), (1, 6)), ("SPAN", (2, 6), (3, 6)), ("SPAN", (4, 6), (7, 6)),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    story.append(tabela_dados)
+    story.append(Spacer(1, 4))
+
+    # Bloco de Observações / Perguntas de Renovação
+    obs_content = [
+        Paragraph("<b>Observações / Requerimento:</b>", style_label),
+        Paragraph("1. Deseja renovar a matrícula para o 2º semestre de 2026? &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] Sim &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] Não", style_obs),
+        Paragraph("2. Está cursando o Ensino Médio atualmente? &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] Sim &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] Não", style_obs),
+        Paragraph("3. Em caso afirmativo, onde? __________________________________________________________________", style_obs),
+        Paragraph("4. Qual série? _________________________________________________________________________________", style_obs),
+        Paragraph("<i>5. A renovação de matrícula não é automática, portanto, o estudante que não efetiva-la no período determinado perderá o direito à vaga.</i>", style_obs),
+    ]
+    tabela_obs = Table([[obs_content]], colWidths=[PAGE_WIDTH])
+    tabela_obs.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(tabela_obs)
+    story.append(Spacer(1, 4))
+
+    # Seção de Atualização de Endereço / Outros Dados
+    atualizacao_header = Table([[Paragraph("<b>Atualização de Endereço / Outros Dados</b> (Preencha somente se houver alteração)", style_label)]], colWidths=[PAGE_WIDTH])
+    atualizacao_header.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E2E8F0")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(atualizacao_header)
+
+    linhas_vazias = [["" for _ in range(1)] for _ in range(4)]
+    tabela_atualizacao = Table(linhas_vazias, colWidths=[PAGE_WIDTH], rowHeights=[14, 14, 14, 14])
+    tabela_atualizacao.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+    ]))
+    story.append(tabela_atualizacao)
+    story.append(Spacer(1, 10))
+
+    # Data e Assinatura do Estudante
+    data_atual = datetime.now().strftime("%d/%m/%Y")
+    tabela_rodape = Table([
+        [Paragraph(f"Planaltina-DF, _____ de ______________________ de 2026.", style_obs)],
+        [Spacer(1, 20)],
+        [Paragraph("_____________________________________________________<br/><b>Assinatura do Estudante / Responsável</b>", ParagraphStyle("Sig", fontName="Helvetica", fontSize=8, alignment=1))]
+    ], colWidths=[PAGE_WIDTH])
+    tabela_rodape.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("BOX", (0, 0), (-1, -1), 1, colors.black),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(tabela_rodape)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
