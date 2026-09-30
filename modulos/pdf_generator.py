@@ -1286,10 +1286,13 @@ def gerar_pdf_passes_turma_unificado(df_turma):
             orgao_expeditor = get_dado(dados_aluno, "org_expedidor", "orgao_expeditor")
             data_expedicao = get_dado(dados_aluno, "dta_expedicao", "data_expedicao")
             cpf = get_dado(dados_aluno, "cpf")
-            nome_mae = get_dado(dados_aluno, "nome_mae", "mae")
-            raw_pai = get_dado(dados_aluno, "nome_pai", "pai")
-            nome_pai = "" if raw_pai.lower() in ["não sei", "nao sei", "não informado", "-"] else raw_pai
-            nome_responsavel = get_dado(dados_aluno, "nome_responsavel")
+            
+            # Captura corrigida para os nomes de mãe, pai e responsável
+            nome_mae = get_dado(dados_aluno, "nome_mae", "mae", "filiacao_mae", "nome da mãe")
+            raw_pai = get_dado(dados_aluno, "nome_pai", "pai", "filiacao_pai", "nome do pai")
+            nome_pai = "" if raw_pai.lower() in ["não sei", "nao sei", "não informado", "-", "none"] else raw_pai
+            nome_responsavel = get_dado(dados_aluno, "nome_responsavel", "responsavel")
+            
             endereco = get_dado(dados_aluno, "endereco")
             bairro = get_dado(dados_aluno, "bairro")
             cidade = get_dado(dados_aluno, "cidade") or "PLANALTINA"
@@ -1335,7 +1338,7 @@ def gerar_pdf_passes_turma_unificado(df_turma):
                                   colWidths=[PAGE_WIDTH / 2, PAGE_WIDTH / 2])
             tabela_rodape.setStyle(TableStyle([("SPAN", (0, 1), (1, 1)), ("BOX", (0, 0), (-1, -1), 1, colors.black), ("ALIGN", (0, 1), (-1, -1), "CENTER")]))
 
-            # Montagem da página para o aluno atual
+            # Montagem estruturada do documento de cada aluno
             story.append(tabela_cabecalho)
             story.append(Spacer(1, 5))
             story.append(tabela_titulo)
@@ -1346,13 +1349,12 @@ def gerar_pdf_passes_turma_unificado(df_turma):
             story.append(Spacer(1, 5))
             story.append(tabela_rodape)
             
-            # Quebra de página para o próximo aluno da turma
+            # Quebra para separar o próximo aluno no lote unificado
             story.append(PageBreak())
 
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 # ============================================================
 # 9. RENOVAÇÃO
 # ============================================================
