@@ -1225,8 +1225,7 @@ def gerar_pdf_passes_turma_unificado(df_turma):
             turma = row.get('Turma', 'N/A')
             
             # Bloco visual do passe para o aluno atual
-            # Correto (com aspas):
-            story.append(Paragraph("<b>PASSE ESTUDANTIL - COMPROVANTE</b>", estilo))
+            story.append(Paragraph("<b>PASSE ESTUDANTIL - COMPROVANTE</b>", ...))
             story.append(Spacer(1, 10))
             story.append(Paragraph(f"<b>Aluno(a):</b> {nome}", styles['Normal']))
             story.append(Paragraph(f"<b>Matrícula:</b> {matricula}", styles['Normal']))
