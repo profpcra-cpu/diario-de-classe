@@ -1258,7 +1258,7 @@ def gerar_pdf_renovacao_turma_unificado(df_turma):
             turma = row.get('Turma', 'N/A')
             
             # Bloco de comprovação de renovação por aluno
-            story.append(Paragraph(<b>COMPROVANTE DE RENOVAÇÃO DE MATRÍCULA</b>, styles['Heading2']))
+            story.append(Paragraph("<b>COMPROVANTE DE RENOVAÇÃO DE MATRÍCULA</b>", ...))
             story.append(Spacer(1, 10))
             story.append(Paragraph(f"Declaramos para os devidos fins que a matrícula do(a) aluno(a) <b>{nome}</b> (Matrícula: {matricula}), pertencente à turma <b>{turma}</b>, encontra-se renovada.", styles['Normal']))
             story.append(Spacer(1, 30))
