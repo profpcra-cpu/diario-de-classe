@@ -1224,8 +1224,8 @@ def gerar_pdf_passes_turma_unificado(df_turma):
             matricula = row.get('Matricula', 'N/A')
             turma = row.get('Turma', 'N/A')
             
-            # Bloco visual do passe para o aluno atual
-            story.append(Paragraph("<b>PASSE ESTUDANTIL - COMPROVANTE</b>", ...))
+            # Bloco visual do passe para o aluno atual (Corrigido para usar styles['Heading2'])
+            story.append(Paragraph("<b>PASSE ESTUDANTIL - COMPROVANTE</b>", styles['Heading2']))
             story.append(Spacer(1, 10))
             story.append(Paragraph(f"<b>Aluno(a):</b> {nome}", styles['Normal']))
             story.append(Paragraph(f"<b>Matrícula:</b> {matricula}", styles['Normal']))
@@ -1239,7 +1239,6 @@ def gerar_pdf_passes_turma_unificado(df_turma):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 # ============================================================
 # 9. RENOVAÇÃO
 # ============================================================
