@@ -1146,24 +1146,130 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
 
 
 # ============================================================
-# 7. PASSES TURMA UNIFICADO
+# 7. RELATORIO POR TURMA UNIFICADO
 # ============================================================
-def gerar_pdf_passes_turma_unificado(dados_turma):
+import io
+from reportlab.lib.pagesizes import landscape, A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
+
+def gerar_pdf_relatorio_turma(df_turma, nome_turma):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    story = [Paragraph("Relatório de Passes da Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
+    # Usando orientação paisagem para melhor acomodar os dados da turma
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    titulo_style = ParagraphStyle(
+        'TituloTurma',
+        parent=styles['Heading1'],
+        alignment=TA_CENTER,
+        fontSize=16,
+        spaceAfter=15
+    )
+    
+    story.append(Paragraph(f"Relatório Geral - Turma: {nome_turma}", titulo_style))
+    story.append(Spacer(1, 10))
+    
+    # Cabeçalho e dados da tabela baseados nas colunas comuns da planilha
+    cabecalho = ["Nº", "Nome do Aluno", "Matrícula", "Turno", "Situação"]
+    dados_tabela = [cabecalho]
+    
+    for idx, row in df_turma.iterrows():
+        dados_tabela.append([
+            str(idx + 1),
+            str(row.get('Nome', '')),
+            str(row.get('Matricula', '')),
+            str(row.get('Turno', '')),
+            str(row.get('Situacao', 'Ativo'))
+        ])
+        
+    tabela = Table(dados_tabela, colWidths=[40, 300, 120, 100, 120])
+    tabela.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#2C3E50")),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('BACKGROUND', (0,1), (-1,-1), colors.HexColor("#ECF0F1")),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#F9F9F9")])
+    ]))
+    
+    story.append(tabela)
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
 
 # ============================================================
-# 8. RENOVAÇÃO TURMA UNIFICADO
+# 8. PASSE UNIFICADO
 # ============================================================
-def gerar_pdf_renovacao_turma_unificado(dados_turma):
+
+from reportlab.platypus import PageBreak
+
+def gerar_pdf_passes_turma_unificado(df_turma):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    story = [Paragraph("Relatório de Renovação de Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
+    story = []
+    
+    styles = getSampleStyleSheet()
+    
+    if df_turma is not None and not df_turma.empty:
+        for idx, row in df_turma.iterrows():
+            nome = row.get('Nome', 'Não informado')
+            matricula = row.get('Matricula', 'N/A')
+            turma = row.get('Turma', 'N/A')
+            
+            # Bloco visual do passe para o aluno atual
+            story.append(Paragraph(<b>PASSE ESTUDANTIL - COMPROVANTE</b>, styles['Heading2']))
+            story.append(Spacer(1, 10))
+            story.append(Paragraph(f"<b>Aluno(a):</b> {nome}", styles['Normal']))
+            story.append(Paragraph(f"<b>Matrícula:</b> {matricula}", styles['Normal']))
+            story.append(Paragraph(f"<b>Turma:</b> {turma}", styles['Normal']))
+            story.append(Spacer(1, 20))
+            story.append(Paragraph("<i>Este documento valida o direito ao passe estudantil conforme as normas vigentes.</i>", styles['Italic']))
+            
+            # Adiciona quebra de página para separar os passes de cada aluno no PDF unificado
+            story.append(PageBreak())
+            
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+# ============================================================
+# 9. RENOVAÇÃO
+# ============================================================
+
+def gerar_pdf_renovacao_turma_unificado(df_turma):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    
+    if df_turma is not None and not df_turma.empty:
+        for idx, row in df_turma.iterrows():
+            nome = row.get('Nome', 'Não informado')
+            matricula = row.get('Matricula', 'N/A')
+            turma = row.get('Turma', 'N/A')
+            
+            # Bloco de comprovação de renovação por aluno
+            story.append(Paragraph(<b>COMPROVANTE DE RENOVAÇÃO DE MATRÍCULA</b>, styles['Heading2']))
+            story.append(Spacer(1, 10))
+            story.append(Paragraph(f"Declaramos para os devidos fins que a matrícula do(a) aluno(a) <b>{nome}</b> (Matrícula: {matricula}), pertencente à turma <b>{turma}</b>, encontra-se renovada.", styles['Normal']))
+            story.append(Spacer(1, 30))
+            story.append(Paragraph("___________________________________________________", styles['Normal']))
+            story.append(Paragraph("Assinatura da Secretaria / Direção", styles['Normal']))
+            
+            # Quebra de página para o próximo aluno do lote
+            story.append(PageBreak())
+            
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+V
