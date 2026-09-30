@@ -1224,3 +1224,16 @@ def gerar_pdf_passes_turma_unificado(dados_turma):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+
+# ============================================================
+# RENOVAÇÃO TURMA UNIFICADO
+# ============================================================
+def gerar_pdf_renovacao_turma_unificado(dados_turma):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = [Paragraph("Relatório de Renovação de Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
