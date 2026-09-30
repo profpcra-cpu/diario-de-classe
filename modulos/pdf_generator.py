@@ -1208,6 +1208,19 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     ]))
     story.append(tabela_rodape)
 
+
+
+    # ============================================================
+# PASSES TURMA UNIFICADO
+# ============================================================
+def gerar_pdf_passes_turma_unificado(dados_turma):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = [Paragraph("Relatório de Passes da Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
