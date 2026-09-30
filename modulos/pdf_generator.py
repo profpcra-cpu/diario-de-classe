@@ -290,3 +290,30 @@ def gerar_pdf_renovacao_turma_unificado(df_turma):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+def gerar_pdf_afin(dados_afin):
+    """Gera o documento PDF para o módulo AFIN."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
+
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.darkblue)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=10, leading=14)
+
+    story.append(Paragraph("<b>MÓDULO AFIN - DOCUMENTO OFICIAL</b>", titulo_style))
+    story.append(Spacer(1, 15))
+
+    # Conteúdo básico com os dados recebidos
+    for chave, valor in dados_afin.items():
+        story.append(Paragraph(f"<b>{str(chave).replace('_', ' ').title()}:</b> {str(valor)}", texto_style))
+        story.append(Spacer(1, 5))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
