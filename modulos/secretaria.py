@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import io
 import pandas as pd
 import streamlit as st
@@ -164,7 +165,7 @@ def renderizar_modulo_secretaria():
 
                     st.markdown("---")
                     st.markdown("### 📝 Editor Personalizado e Emissão de Documentos")
-                    st.info("Selecione o documento oficial abaixo. O cabeçalho e dados virão pré-preenchidos automaticamente.")
+                    st.info("Selecione o documento oficial abaixo. Todos os dados virão pré-preenchidos em campos editáveis para revisão.")
 
                     tipo_documento = st.selectbox(
                         "Selecione o Documento a Emitir:",
@@ -182,49 +183,79 @@ def renderizar_modulo_secretaria():
                     with st.form(key=f"form_edicao_doc_{matricula_busca}"):
                         st.markdown(f"**A ajustar parâmetros para:** `{tipo_documento}`")
                         
+                        # Bloco 1: Dados Pessoais Básicos
+                        st.markdown("##### 👤 Identificação Pessoal")
                         col_ed1, col_ed2 = st.columns(2)
                         with col_ed1:
                             edit_nome = st.text_input("Nome Completo:", value=str(dados_originais.get("nome", "")))
                             edit_curso = st.text_input("Curso:", value=str(dados_originais.get("curso", "TÉCNICO EM ENFERMAGEM")))
                             edit_turma = st.text_input("Turma / Turno:", value=str(dados_originais.get("turma", "")))
-                            edit_rg = st.text_input("Identidade (RG):", value=str(dados_originais.get("identidade", "")))
+                            edit_rg = st.text_input("Identidade (RG):", value=str(dados_originais.get("identidade", dados_originais.get("rg", ""))))
+                            edit_orgao = st.text_input("Órgão Expeditor / UF:", value=str(dados_originais.get("orgao_expeditor", dados_originais.get("orgao", ""))))
                         
                         with col_ed2:
                             edit_cpf = st.text_input("CPF:", value=str(dados_originais.get("cpf", "")))
-                            edit_nasc = st.text_input("Data de Nascimento:", value=str(dados_originais.get("data_nascimento", "")))
+                            edit_nasc = st.text_input("Data de Nascimento:", value=str(dados_originais.get("data_nascimento", dados_originais.get("dt_nascimento", ""))))
                             edit_sexo = st.text_input("Sexo:", value=str(dados_originais.get("sexo", "")))
+                            edit_dt_exp = st.text_input("Data de Expedição (RG):", value=str(dados_originais.get("data_expedicao", "")))
                             edit_data_emissao = st.text_input("Data do Documento:", value="29/09/2026")
 
+                        # Bloco 2: Filiação e Naturalidade
+                        st.markdown("##### 👨‍👩‍👧 Filiação e Origem")
+                        col_fili1, col_fili2, col_fili3 = st.columns(3)
+                        with col_fili1:
+                            edit_mae = st.text_input("Nome da Mãe:", value=str(dados_originais.get("nome_mae", dados_originais.get("mae", ""))))
+                        with col_fili2:
+                            edit_pai = st.text_input("Nome do Pai:", value=str(dados_originais.get("nome_pai", dados_originais.get("pai", ""))))
+                        with col_fili3:
+                            edit_responsavel = st.text_input("Nome do Responsável:", value=str(dados_originais.get("nome_responsavel", "")))
+
+                        col_orig1, col_orig2, col_orig3 = st.columns(3)
+                        with col_orig1:
+                            edit_nacionalidade = st.text_input("Nacionalidade:", value=str(dados_originais.get("nacionalidade", "BRASILEIRA")))
+                        with col_orig2:
+                            edit_naturalidade = st.text_input("Naturalidade:", value=str(dados_originais.get("naturalidade", "")))
+                        with col_orig3:
+                            edit_uf_nat = st.text_input("UF Naturalidade:", value=str(dados_originais.get("uf", dados_originais.get("uf_nascimento", "DF"))))
+
+                        # Bloco 3: Endereço Completo (Essencial para Passes e Declarações)
+                        st.markdown("##### 🏠 Endereço")
+                        col_end1, col_end2 = st.columns(2)
+                        with col_end1:
+                            edit_endereco = st.text_input("Endereço (Logradouro / Número / Bloco):", value=str(dados_originais.get("endereco", "")))
+                            edit_cidade = st.text_input("Cidade:", value=str(dados_originais.get("cidade", "PLANALTINA")))
+                        with col_end2:
+                            edit_bairro = st.text_input("Bairro:", value=str(dados_originais.get("bairro", "")))
+                            col_uf_cep1, col_uf_cep2 = st.columns(2)
+                            with col_uf_cep1:
+                                edit_uf_end = st.text_input("UF Endereço:", value=str(dados_originais.get("uf_endereco", "DF")))
+                            with col_uf_cep2:
+                                edit_cep = st.text_input("CEP:", value=str(dados_originais.get("cep", "")))
+
+                        # Bloco 4: Observações e Instruções Dinâmicas
+                        st.markdown("##### 📋 Observações / Instruções")
                         if tipo_documento == "Renovação de Matrícula":
-                            st.markdown("---")
-                            st.markdown("📋 **Campos Específicos (Renovação de Matrícula):**")
-                            col_rm1, col_rm2, col_rm3 = st.columns(3)
-                            with col_rm1:
-                                edit_mae = st.text_input("Nome da Mãe:", value=str(dados_originais.get("nome_mae", "")))
-                            with col_rm2:
-                                edit_pai = st.text_input("Nome do Pai:", value=str(dados_originais.get("nome_pai", "")))
-                            with col_rm3:
-                                edit_nacionalidade = st.text_input("Nacionalidade:", value=str(dados_originais.get("nacionalidade", "BRASILEIRA")))
-
-                            col_rm4, col_rm5 = st.columns(2)
-                            with col_rm4:
-                                edit_naturalidade = st.text_input("Naturalidade:", value=str(dados_originais.get("naturalidade", "PLANALTINA")))
-                            with col_rm5:
-                                edit_uf_nat = st.text_input("UF Naturalidade:", value=str(dados_originais.get("uf", "DF")))
-
                             edit_observacao_doc = st.text_area(
-                                "Observações / Instruções da Ficha de Renovação:",
+                                "Instruções da Ficha de Renovação:",
                                 value=(
                                     "1. Deseja renovar a matrícula para o 2º semestre de 2026? [ X ] Sim [  ] Não\n"
                                     "2. Está cursando o Ensino Médio atualmente? [ X ] Sim [  ] Não\n"
                                     "A renovação de matrícula não é automática, portanto, o estudante que não efetiva-la perderá o direito à vaga."
                                 ),
-                                height=100
+                                height=80
                             )
                         elif tipo_documento == "Passe Estudantil":
-                            edit_observacao_doc = "Declaração válida por 30 dias para efeitos de Passe Estudantil."
+                            edit_observacao_doc = st.text_area(
+                                "Observações do Passe Estudantil:",
+                                value="Declaração válida por 30 dias para efeitos de Passe Estudantil.",
+                                height=60
+                            )
                         else:
-                            edit_observacao_doc = "Documento emitido conforme registos da instituição."
+                            edit_observacao_doc = st.text_area(
+                                "Observações do Documento:",
+                                value="Documento emitido conforme registos da instituição.",
+                                height=60
+                            )
 
                         botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
 
@@ -234,18 +265,26 @@ def renderizar_modulo_secretaria():
                         dados_customizados["curso"] = edit_curso
                         dados_customizados["turma"] = edit_turma
                         dados_customizados["identidade"] = edit_rg
+                        dados_customizados["rg"] = edit_rg
+                        dados_customizados["orgao_expeditor"] = edit_orgao
                         dados_customizados["cpf"] = edit_cpf
                         dados_customizados["data_nascimento"] = edit_nasc
                         dados_customizados["sexo"] = edit_sexo
+                        dados_customizados["data_expedicao"] = edit_dt_exp
                         dados_customizados["data_emissao"] = edit_data_emissao
+                        dados_customizados["nome_mae"] = edit_mae
+                        dados_customizados["nome_pai"] = edit_pai
+                        dados_customizados["nome_responsavel"] = edit_responsavel
+                        dados_customizados["nacionalidade"] = edit_nacionalidade
+                        dados_customizados["naturalidade"] = edit_naturalidade
+                        dados_customizados["uf"] = edit_uf_nat
+                        dados_customizados["endereco"] = edit_endereco
+                        dados_customizados["bairro"] = edit_bairro
+                        dados_customizados["cidade"] = edit_cidade
+                        dados_customizados["cep"] = edit_cep
                         dados_customizados["observacao"] = edit_observacao_doc
 
                         if tipo_documento == "Renovação de Matrícula":
-                            dados_customizados["nome_mae"] = edit_mae
-                            dados_customizados["nome_pai"] = edit_pai
-                            dados_customizados["nacionalidade"] = edit_nacionalidade
-                            dados_customizados["naturalidade"] = edit_naturalidade
-                            dados_customizados["uf"] = edit_uf_nat
                             pdf_bytes_gerado = gerar_pdf_renovacao_matricula(dados_customizados)
                             nome_ficheiro = f"renovacao_matricula_{matricula_busca}.pdf"
 
