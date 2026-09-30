@@ -1,357 +1,292 @@
 # -*- coding: utf-8 -*-
 import io
 import pandas as pd
-import streamlit as st
-
-from modulos.conexao import executar_query
-from modulos.pdf_generator import (
-    gerar_pdf_declaracao_escolaridade,
-    gerar_pdf_historico_aluno,
-    gerar_pdf_passe_estudantil,
-    gerar_pdf_passes_turma_unificado,
-    gerar_pdf_renovacao_matricula,
-    gerar_pdf_renovacao_turma_unificado,
-)
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 
-def renderizar_modulo_secretaria():
-    st.subheader(
-        "🎓 Secretaria Escolar - Motor de Ficha Académica e Documentos"
-    )
-    st.markdown(
-        "Selecione o estudante, escolha o tipo de documento, ajuste os campos específicos se necessário e emita a documentação oficial."
-    )
+def gerar_pdf_renovacao_matricula(dados_aluno):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
 
-    try:
-        df_todos_alunos = executar_query(
-            "SELECT matricula, nome, turma FROM TB_PESSOAS"
-        )
+    # Estilos
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.darkblue)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=10, leading=14)
+    negrito_style = ParagraphStyle('TextoNegrito', parent=texto_style, fontName='Helvetica-Bold')
 
-        if df_todos_alunos is None or df_todos_alunos.empty:
-            st.warning("Nenhum aluno encontrado na base de dados.")
-            return
+    # Cabeçalho
+    story.append(Paragraph("<b>INSTITUIÇÃO DE ENSINO TÉCNICO E PROFISSIONALIZANTE</b>", titulo_style))
+    story.append(Paragraph("<b>SECRETARIA ACADÉMICA - FICHA DE RENOVAÇÃO DE MATRÍCULA</b>", titulo_style))
+    story.append(Spacer(1, 15))
 
-        df_todos_alunos["opcao_combo"] = (
-            df_todos_alunos["matricula"].astype(str)
-            + " - "
-            + df_todos_alunos["nome"].astype(str)
-        )
-        lista_alunos_dropdown = df_todos_alunos["opcao_combo"].tolist()
-        aluno_selecionado = st.selectbox(
-            "Selecione o Estudante (Matrícula e Nome):", lista_alunos_dropdown
-        )
+    # Tabela de Dados Pessoais
+    nome = str(dados_aluno.get("nome", ""))
+    matricula = str(dados_aluno.get("matricula", ""))
+    curso = str(dados_aluno.get("curso", ""))
+    turma = str(dados_aluno.get("turma", ""))
+    rg = str(dados_aluno.get("identidade", dados_aluno.get("rg", "")))
+    cpf = str(dados_aluno.get("cpf", ""))
+    mae = str(dados_aluno.get("nome_mae", dados_aluno.get("mae", "")))
+    pai = str(dados_aluno.get("nome_pai", dados_aluno.get("pai", "")))
+    nasc = str(dados_aluno.get("data_nascimento", ""))
 
-        if aluno_selecionado:
-            matricula_busca = aluno_selecionado.split(" - ")[0].strip()
-            df_dados_pessoais = executar_query(
-                "SELECT * FROM TB_PESSOAS WHERE matricula = %s",
-                params=(matricula_busca,),
-            )
+    dados_tabela = [
+        [Paragraph(f"<b>Estudante:</b> {nome}", texto_style), Paragraph(f"<b>Matrícula:</b> {matricula}", texto_style)],
+        [Paragraph(f"<b>Curso:</b> {curso}", texto_style), Paragraph(f"<b>Turma:</b> {turma}", texto_style)],
+        [Paragraph(f"<b>RG:</b> {rg}", texto_style), Paragraph(f"<b>CPF:</b> {cpf}", texto_style)],
+        [Paragraph(f"<b>Mãe:</b> {mae}", texto_style), Paragraph(f"<b>Pai:</b> {pai}", texto_style)],
+        [Paragraph(f"<b>Data de Nascimento:</b> {nasc}", texto_style), Paragraph("", texto_style)]
+    ]
 
-            if df_dados_pessoais is not None and not df_dados_pessoais.empty:
-                st.success(
-                    f"Ficha carregada com sucesso para a matrícula: {matricula_busca}"
-                )
-                aba_ficha, aba_historico = st.tabs(
-                    [
-                        "📄 Ficha Cadastral (Dados Pessoais)",
-                        "📚 Histórico, Edição e Emissão de Documentos",
-                    ]
-                )
+    t = Table(dados_tabela, colWidths=[270, 270])
+    t.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1, colors.grey),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 15))
 
-                # -------------------------------------------------------------
-                # ABA 1: FICHA CADASTRAL
-                # -------------------------------------------------------------
-                with aba_ficha:
-                    st.markdown(
-                        "### Informações Pessoais e Cadastrais do Estudante"
-                    )
-                    aluno_info = df_dados_pessoais.iloc[0].to_dict()
+    # Observações / Instruções
+    obs = str(dados_aluno.get("observacao", "Renovação de matrícula referente ao período letivo."))
+    story.append(Paragraph("<b>Termos e Instruções:</b>", negrito_style))
+    story.append(Spacer(1, 5))
+    story.append(Paragraph(obs.replace("\n", "<br/>"), texto_style))
+    story.append(Spacer(1, 40))
 
-                    with st.form(key=f"form_ficha_{matricula_busca}"):
-                        col_f1, col_f2 = st.columns(2)
-                        campos_atualizados = {}
-                        chaves = [
-                            k
-                            for k in aluno_info.keys()
-                            if k.lower() != "matricula"
-                        ]
+    # Assinaturas
+    story.append(Paragraph("_" * 50, texto_style))
+    story.append(Paragraph("Assinatura do Estudante ou Responsável Legal", texto_style))
 
-                        for i, col_name in enumerate(chaves):
-                            val_atual = str(aluno_info.get(col_name, ""))
-                            if val_atual in ("None", "nan", "<NA>"):
-                                val_atual = ""
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
-                            target_col = col_f1 if i % 2 == 0 else col_f2
-                            with target_col:
-                                campos_atualizados[col_name] = st.text_input(
-                                    f"{col_name.replace('_', ' ').title()}:",
-                                    value=val_atual,
-                                )
 
-                        if st.form_submit_button(
-                            "💾 Guardar Alterações Cadastrais na Base de Dados"
-                        ):
-                            try:
-                                set_clauses = ", ".join(
-                                    [f"{k} = %s" for k in campos_atualizados]
-                                )
-                                sql_upd_cad = f"UPDATE TB_PESSOAS SET {set_clauses} WHERE matricula = %s"
-                                params = list(
-                                    campos_atualizados.values()
-                                ) + [matricula_busca]
-                                executar_query(
-                                    sql_upd_cad, params=params, fetch=False
-                                )
-                                st.success(
-                                    "Alterações cadastrais guardadas com sucesso!"
-                                )
-                                st.rerun()
-                            except Exception as e:
-                                st.error(
-                                    f"Erro ao guardar alterações cadastrais: {e}"
-                                )
+def gerar_pdf_passe_estudantil(dados_aluno):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
 
-                # -------------------------------------------------------------
-                # ABA 2: HISTÓRICO, EDIÇÃO PRÉ-IMPRESSÃO E EMISSÃO
-                # -------------------------------------------------------------
-                with aba_historico:
-                    st.markdown("### Histórico Curricular e Notas Associadas")
-                    df_historico_aluno = executar_query(
-                        "SELECT * FROM TB_DIARIO WHERE matricula = %s",
-                        params=(matricula_busca,),
-                    )
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.darkblue)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=10, leading=14)
 
-                    if df_historico_aluno is None or df_historico_aluno.empty:
-                        st.info("Não existem registos curriculares na TB_DIARIO para este aluno.")
-                        df_historico_editado = pd.DataFrame()
-                    else:
-                        df_historico_editado = st.data_editor(
-                            df_historico_aluno,
-                            use_container_width=True,
-                            key=f"historico_editor_{matricula_busca}",
-                        )
+    story.append(Paragraph("<b>DECLARAÇÃO PARA PASSE ESTUDANTIL</b>", titulo_style))
+    story.append(Spacer(1, 20))
 
-                        if st.button("💾 Guardar Alterações do Histórico"):
-                            try:
-                                atualizados_hist = 0
-                                for _, row in df_historico_editado.iterrows():
-                                    mat = row.get("matricula")
-                                    iduc_val = row.get("iduc")
+    nome = str(dados_aluno.get("nome", ""))
+    matricula = str(dados_aluno.get("matricula", ""))
+    curso = str(dados_aluno.get("curso", ""))
+    turma = str(dados_aluno.get("turma", ""))
+    cpf = str(dados_aluno.get("cpf", ""))
 
-                                    if mat and iduc_val:
-                                        sql_hist = """
-                                            UPDATE TB_DIARIO 
-                                            SET unidade_curricular = %s, carga_horaria = %s, modulo = %s, faltas = %s 
-                                            WHERE matricula = %s AND iduc = %s
-                                        """
-                                        executar_query(
-                                            sql_hist,
-                                            params=(
-                                                row.get("unidade_curricular"),
-                                                row.get("carga_horaria"),
-                                                row.get("modulo"),
-                                                row.get("faltas"),
-                                                mat,
-                                                iduc_val,
-                                            ),
-                                            fetch=False,
-                                        )
-                                        atualizados_hist += 1
-                                st.success(f"Sucesso! {atualizados_hist} registos guardados.")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao guardar histórico: {e}")
+    texto_declaracao = f"""
+    Declaramos para os devidos fins de direito, junto à empresa de transporte público, que o(a) estudante <b>{nome}</b>, 
+    inscrito(a) sob a matrícula <b>{matricula}</b>, portador(a) do CPF <b>{cpf}</b>, encontra-se regularmente matriculado(a) 
+    e frequentando o curso <b>{curso}</b>, turma <b>{turma}</b>, nesta instituição de ensino.
+    <br/><br/>
+    A presente declaração é válida por 30 (trinta) dias a contar da data de sua emissão.
+    """
+    story.append(Paragraph(texto_declaracao, texto_style))
+    story.append(Spacer(1, 60))
 
-                    st.markdown("---")
-                    st.markdown("### 📝 Editor Personalizado e Emissão de Documentos")
-                    st.info("Selecione o documento oficial abaixo. Todos os dados virão pré-preenchidos em campos editáveis para revisão.")
+    story.append(Paragraph("Planaltina - DF, 29 de Setembro de 2026.", texto_style))
+    story.append(Spacer(1, 40))
+    story.append(Paragraph("_" * 40, texto_style))
+    story.append(Paragraph("Secretaria Escolar", texto_style))
 
-                    tipo_documento = st.selectbox(
-                        "Selecione o Documento a Emitir:",
-                        [
-                            "Renovação de Matrícula",
-                            "Passe Estudantil",
-                            "Declaração de Escolaridade", 
-                            "Declaração de Conclusão", 
-                            "Histórico Escolar Oficial"
-                        ]
-                    )
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
-                    dados_originais = df_dados_pessoais.iloc[0].to_dict()
 
-                    with st.form(key=f"form_edicao_doc_{matricula_busca}"):
-                        st.markdown(f"**A ajustar parâmetros para:** `{tipo_documento}`")
-                        
-                        # Bloco 1: Dados Pessoais Básicos
-                        st.markdown("##### 👤 Identificação Pessoal")
-                        col_ed1, col_ed2 = st.columns(2)
-                        with col_ed1:
-                            edit_nome = st.text_input("Nome Completo:", value=str(dados_originais.get("nome", "")))
-                            edit_curso = st.text_input("Curso:", value=str(dados_originais.get("curso", "TÉCNICO EM ENFERMAGEM")))
-                            edit_turma = st.text_input("Turma / Turno:", value=str(dados_originais.get("turma", "")))
-                            edit_rg = st.text_input("Identidade (RG):", value=str(dados_originais.get("identidade", dados_originais.get("rg", ""))))
-                            edit_orgao = st.text_input("Órgão Expeditor / UF:", value=str(dados_originais.get("orgao_expeditor", dados_originais.get("orgao", ""))))
-                        
-                        with col_ed2:
-                            edit_cpf = st.text_input("CPF:", value=str(dados_originais.get("cpf", "")))
-                            edit_nasc = st.text_input("Data de Nascimento:", value=str(dados_originais.get("data_nascimento", dados_originais.get("dt_nascimento", ""))))
-                            edit_sexo = st.text_input("Sexo:", value=str(dados_originais.get("sexo", "")))
-                            edit_dt_exp = st.text_input("Data de Expedição (RG):", value=str(dados_originais.get("data_expedicao", "")))
-                            edit_data_emissao = st.text_input("Data do Documento:", value="29/09/2026")
+def gerar_pdf_declaracao_escolaridade(dados_aluno):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
 
-                        # Bloco 2: Filiação e Naturalidade
-                        st.markdown("##### 👨‍👩‍👧 Filiação e Origem")
-                        col_fili1, col_fili2, col_fili3 = st.columns(3)
-                        with col_fili1:
-                            edit_mae = st.text_input("Nome da Mãe:", value=str(dados_originais.get("nome_mae", dados_originais.get("mae", ""))))
-                        with col_fili2:
-                            edit_pai = st.text_input("Nome do Pai:", value=str(dados_originais.get("nome_pai", dados_originais.get("pai", ""))))
-                        with col_fili3:
-                            edit_responsavel = st.text_input("Nome do Responsável:", value=str(dados_originais.get("nome_responsavel", "")))
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.darkblue)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=11, leading=16)
 
-                        col_orig1, col_orig2, col_orig3 = st.columns(3)
-                        with col_orig1:
-                            edit_nacionalidade = st.text_input("Nacionalidade:", value=str(dados_originais.get("nacionalidade", "BRASILEIRA")))
-                        with col_orig2:
-                            edit_naturalidade = st.text_input("Naturalidade:", value=str(dados_originais.get("naturalidade", "")))
-                        with col_orig3:
-                            edit_uf_nat = st.text_input("UF Naturalidade:", value=str(dados_originais.get("uf", dados_originais.get("uf_nascimento", "DF"))))
+    story.append(Paragraph("<b>DECLARAÇÃO DE ESCOLARIDADE</b>", titulo_style))
+    story.append(Spacer(1, 25))
 
-                        # Bloco 3: Endereço Completo (Essencial para Passes e Declarações)
-                        st.markdown("##### 🏠 Endereço")
-                        col_end1, col_end2 = st.columns(2)
-                        with col_end1:
-                            edit_endereco = st.text_input("Endereço (Logradouro / Número / Bloco):", value=str(dados_originais.get("endereco", "")))
-                            edit_cidade = st.text_input("Cidade:", value=str(dados_originais.get("cidade", "PLANALTINA")))
-                        with col_end2:
-                            edit_bairro = st.text_input("Bairro:", value=str(dados_originais.get("bairro", "")))
-                            col_uf_cep1, col_uf_cep2 = st.columns(2)
-                            with col_uf_cep1:
-                                edit_uf_end = st.text_input("UF Endereço:", value=str(dados_originais.get("uf_endereco", "DF")))
-                            with col_uf_cep2:
-                                edit_cep = st.text_input("CEP:", value=str(dados_originais.get("cep", "")))
+    nome = str(dados_aluno.get("nome", ""))
+    matricula = str(dados_aluno.get("matricula", ""))
+    curso = str(dados_aluno.get("curso", ""))
+    turma = str(dados_aluno.get("turma", ""))
+    rg = str(dados_aluno.get("identidade", dados_aluno.get("rg", "")))
 
-                        # Bloco 4: Observações e Instruções Dinâmicas
-                        st.markdown("##### 📋 Observações / Instruções")
-                        if tipo_documento == "Renovação de Matrícula":
-                            edit_observacao_doc = st.text_area(
-                                "Instruções da Ficha de Renovação:",
-                                value=(
-                                    "1. Deseja renovar a matrícula para o 2º semestre de 2026? [ X ] Sim [  ] Não\n"
-                                    "2. Está cursando o Ensino Médio atualmente? [ X ] Sim [  ] Não\n"
-                                    "A renovação de matrícula não é automática, portanto, o estudante que não efetiva-la perderá o direito à vaga."
-                                ),
-                                height=80
-                            )
-                        elif tipo_documento == "Passe Estudantil":
-                            edit_observacao_doc = st.text_area(
-                                "Observações do Passe Estudantil:",
-                                value="Declaração válida por 30 dias para efeitos de Passe Estudantil.",
-                                height=60
-                            )
-                        else:
-                            edit_observacao_doc = st.text_area(
-                                "Observações do Documento:",
-                                value="Documento emitido conforme registos da instituição.",
-                                height=60
-                            )
+    texto_dec = f"""
+    Declaramos para os devidos fins que o(a) aluno(a) <b>{nome}</b>, portador(a) da cédula de identidade RG nº <b>{rg}</b> 
+    e matrícula nº <b>{matricula}</b>, está devidamente matriculado(a) e frequentando o curso <b>{curso}</b>, 
+    nesta instituição, Turma <b>{turma}</b>.
+    """
+    story.append(Paragraph(texto_dec, texto_style))
+    story.append(Spacer(1, 50))
+    story.append(Paragraph("Secretaria Escolar", texto_style))
 
-                        botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
-                    if botao_gerar_editado:
-                        dados_customizados = dados_originais.copy()
-                        dados_customizados["nome"] = edit_nome
-                        dados_customizados["curso"] = edit_curso
-                        dados_customizados["turma"] = edit_turma
-                        dados_customizados["identidade"] = edit_rg
-                        dados_customizados["rg"] = edit_rg
-                        dados_customizados["orgao_expeditor"] = edit_orgao
-                        dados_customizados["cpf"] = edit_cpf
-                        dados_customizados["data_nascimento"] = edit_nasc
-                        dados_customizados["sexo"] = edit_sexo
-                        dados_customizados["data_expedicao"] = edit_dt_exp
-                        dados_customizados["data_emissao"] = edit_data_emissao
-                        dados_customizados["nome_mae"] = edit_mae
-                        dados_customizados["nome_pai"] = edit_pai
-                        dados_customizados["nome_responsavel"] = edit_responsavel
-                        dados_customizados["nacionalidade"] = edit_nacionalidade
-                        dados_customizados["naturalidade"] = edit_naturalidade
-                        dados_customizados["uf"] = edit_uf_nat
-                        dados_customizados["endereco"] = edit_endereco
-                        dados_customizados["bairro"] = edit_bairro
-                        dados_customizados["cidade"] = edit_cidade
-                        dados_customizados["cep"] = edit_cep
-                        dados_customizados["observacao"] = edit_observacao_doc
 
-                        if tipo_documento == "Renovação de Matrícula":
-                            pdf_bytes_gerado = gerar_pdf_renovacao_matricula(dados_customizados)
-                            nome_ficheiro = f"renovacao_matricula_{matricula_busca}.pdf"
+def gerar_pdf_historico_aluno(df_historico, dados_aluno):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
 
-                        elif tipo_documento == "Passe Estudantil":
-                            pdf_bytes_gerado = gerar_pdf_passe_estudantil(dados_customizados)
-                            nome_ficheiro = f"passe_estudantil_{matricula_busca}.pdf"
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=13, alignment=1)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=9)
 
-                        elif tipo_documento == "Declaração de Escolaridade":
-                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
-                            nome_ficheiro = f"declaracao_escolaridade_{matricula_busca}.pdf"
+    story.append(Paragraph("<b>HISTÓRICO ESCOLAR / REGISTO CURRICULAR</b>", titulo_style))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(f"<b>Aluno(a):</b> {dados_aluno.get('nome', '')} | <b>Matrícula:</b> {dados_aluno.get('matricula', '')}", texto_style))
+    story.append(Spacer(1, 15))
 
-                        elif tipo_documento == "Declaração de Conclusão":
-                            pdf_bytes_gerado = gerar_pdf_declaracao_escolaridade(dados_customizados)
-                            nome_ficheiro = f"declaracao_conclusao_{matricula_busca}.pdf"
+    if not df_historico.empty:
+        tabela_dados = [["Unidade Curricular", "Carga Horária", "Módulo", "Faltas"]]
+        for _, row in df_historico.iterrows():
+            tabela_dados.append([
+                str(row.get("unidade_curricular", "")),
+                str(row.get("carga_horaria", "")),
+                str(row.get("modulo", "")),
+                str(row.get("faltas", ""))
+            ])
+        t = Table(tabela_dados, colWidths=[240, 100, 100, 60])
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+        ]))
+        story.append(t)
 
-                        else:
-                            df_para_pdf = df_historico_editado if not df_historico_editado.empty else df_historico_aluno
-                            pdf_bytes_gerado = gerar_pdf_historico_aluno(df_para_pdf, dados_customizados)
-                            nome_ficheiro = f"historico_oficial_{matricula_busca}.pdf"
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
-                        st.success(f"Documento '{tipo_documento}' gerado com sucesso!")
-                        st.download_button(
-                            label=f"📥 Descarregar {tipo_documento} (PDF)",
-                            data=pdf_bytes_gerado,
-                            file_name=nome_ficheiro,
-                            mime="application/pdf",
-                            use_container_width=True,
-                        )
 
-                    st.markdown("---")
-                    st.markdown("### 📚 Emissão Unificada em Lote (Turma Inteira)")
-                    
-                    turma_atual = dados_originais.get("turma")
-                    if turma_atual:
-                        st.info(f"Turma detetada para emissão em lote: **{turma_atual}**")
-                        
-                        col_lote1, col_lote2 = st.columns(2)
-                        with col_lote1:
-                            if st.button("🚀 Gerar Passes de Toda a Turma (PDF Único)", use_container_width=True):
-                                with st.spinner("A consolidar passes da turma..."):
-                                    df_turma = executar_query("SELECT * FROM TB_PESSOAS WHERE turma = %s", params=(turma_atual,))
-                                    if df_turma is not None and not df_turma.empty:
-                                        pdf_unificado_bytes = gerar_pdf_passes_turma_unificado(df_turma)
-                                        st.success("PDF de passes unificado com sucesso!")
-                                        st.download_button(
-                                            label="📥 Descarregar Passes Unificados da Turma",
-                                            data=pdf_unificado_bytes,
-                                            file_name=f"passes_turma_{str(turma_atual).replace('/', '-')}.pdf",
-                                            mime="application/pdf",
-                                            use_container_width=True,
-                                        )
-                        with col_lote2:
-                            if st.button("🚀 Gerar Fichas de Renovação da Turma (PDF Único)", use_container_width=True):
-                                with st.spinner("A consolidar fichas de renovação da turma..."):
-                                    df_turma = executar_query("SELECT * FROM TB_PESSOAS WHERE turma = %s", params=(turma_atual,))
-                                    if df_turma is not None and not df_turma.empty:
-                                        pdf_renovacao_unificado = gerar_pdf_renovacao_turma_unificado(df_turma)
-                                        st.success("PDF de renovações unificado com sucesso!")
-                                        st.download_button(
-                                            label="📥 Descarregar Renovações Unificadas da Turma",
-                                            data=pdf_renovacao_unificado,
-                                            file_name=f"renovacoes_turma_{str(turma_atual).replace('/', '-')}.pdf",
-                                            mime="application/pdf",
-                                            use_container_width=True,
-                                        )
-                    else:
-                        st.warning("O aluno selecionado não possui turma associada.")
+# -------------------------------------------------------------------------
+# FUNÇÕES DE EMISSÃO UNIFICADA EM LOTE (TURMA INTEIRA)
+# -------------------------------------------------------------------------
 
-    except Exception as e:
-        st.error(f"Erro ao executar o motor da secretaria: {e}")
+def gerar_pdf_passes_turma_unificado(df_turma):
+    """Gera um único PDF contendo o passe estudantil de todos os alunos da turma (um por página)."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
+
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.darkblue)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=11, leading=16)
+
+    total_alunos = len(df_turma)
+    for idx, (_, row) in enumerate(df_turma.iterrows()):
+        aluno_dict = row.to_dict()
+        nome = str(aluno_dict.get("nome", ""))
+        matricula = str(aluno_dict.get("matricula", ""))
+        curso = str(aluno_dict.get("curso", ""))
+        turma = str(aluno_dict.get("turma", ""))
+        cpf = str(aluno_dict.get("cpf", ""))
+
+        story.append(Paragraph("<b>DECLARAÇÃO PARA PASSE ESTUDANTIL (LOTE)</b>", titulo_style))
+        story.append(Spacer(1, 20))
+
+        texto_declaracao = f"""
+        Declaramos para os devidos fins de direito, junto à empresa de transporte público, que o(a) estudante <b>{nome}</b>, 
+        inscrito(a) sob a matrícula <b>{matricula}</b>, portador(a) do CPF <b>{cpf}</b>, encontra-se regularmente matriculado(a) 
+        e frequentando o curso <b>{curso}</b>, turma <b>{turma}</b>, nesta instituição de ensino.
+        <br/><br/>
+        A presente declaração é válida por 30 (trinta) dias a contar da data de sua emissão.
+        """
+        story.append(Paragraph(texto_declaracao, texto_style))
+        story.append(Spacer(1, 60))
+
+        story.append(Paragraph("Planaltina - DF, 29 de Setembro de 2026.", texto_style))
+        story.append(Spacer(1, 40))
+        story.append(Paragraph("_" * 40, texto_style))
+        story.append(Paragraph("Secretaria Escolar", texto_style))
+
+        # Adiciona quebra de página se não for o último aluno
+        if idx < total_alunos - 1:
+            story.append(PageBreak())
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def gerar_pdf_renovacao_turma_unificado(df_turma):
+    """Gera um único PDF contendo a ficha de renovação de matrícula de todos os alunos da turma (uma por página)."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    story = []
+    styles = getSampleStyleSheet()
+
+    titulo_style = ParagraphStyle('TituloDoc', parent=styles['Heading1'], fontSize=14, alignment=1, textColor=colors.darkblue)
+    texto_style = ParagraphStyle('TextoDoc', parent=styles['Normal'], fontSize=10, leading=14)
+    negrito_style = ParagraphStyle('TextoNegrito', parent=texto_style, fontName='Helvetica-Bold')
+
+    total_alunos = len(df_turma)
+    for idx, (_, row) in enumerate(df_turma.iterrows()):
+        aluno_dict = row.to_dict()
+        
+        story.append(Paragraph("<b>INSTITUIÇÃO DE ENSINO TÉCNICO E PROFISSIONALIZANTE</b>", titulo_style))
+        story.append(Paragraph("<b>SECRETARIA ACADÉMICA - FICHA DE RENOVAÇÃO DE MATRÍCULA (LOTE)</b>", titulo_style))
+        story.append(Spacer(1, 15))
+
+        nome = str(aluno_dict.get("nome", ""))
+        matricula = str(aluno_dict.get("matricula", ""))
+        curso = str(aluno_dict.get("curso", ""))
+        turma = str(aluno_dict.get("turma", ""))
+        rg = str(aluno_dict.get("identidade", aluno_dict.get("rg", "")))
+        cpf = str(aluno_dict.get("cpf", ""))
+        mae = str(aluno_dict.get("nome_mae", aluno_dict.get("mae", "")))
+        pai = str(aluno_dict.get("nome_pai", aluno_dict.get("pai", "")))
+        nasc = str(aluno_dict.get("data_nascimento", ""))
+
+        dados_tabela = [
+            [Paragraph(f"<b>Estudante:</b> {nome}", texto_style), Paragraph(f"<b>Matrícula:</b> {matricula}", texto_style)],
+            [Paragraph(f"<b>Curso:</b> {curso}", texto_style), Paragraph(f"<b>Turma:</b> {turma}", texto_style)],
+            [Paragraph(f"<b>RG:</b> {rg}", texto_style), Paragraph(f"<b>CPF:</b> {cpf}", texto_style)],
+            [Paragraph(f"<b>Mãe:</b> {mae}", texto_style), Paragraph(f"<b>Pai:</b> {pai}", texto_style)],
+            [Paragraph(f"<b>Data de Nascimento:</b> {nasc}", texto_style), Paragraph("", texto_style)]
+        ]
+
+        t = Table(dados_tabela, colWidths=[270, 270])
+        t.setStyle(TableStyle([
+            ('BOX', (0,0), (-1,-1), 1, colors.grey),
+            ('INNERGRID', (0,0), (-1,-1), 0.5, colors.lightgrey),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        story.append(t)
+        story.append(Spacer(1, 15))
+
+        obs = "1. Deseja renovar a matrícula para o próximo semestre? [ X ] Sim [  ] Não\n2. Está cursando o Ensino Médio atualmente? [ X ] Sim [  ] Não\nA renovação de matrícula não é automática."
+        story.append(Paragraph("<b>Termos e Instruções:</b>", negrito_style))
+        story.append(Spacer(1, 5))
+        story.append(Paragraph(obs.replace("\n", "<br/>"), texto_style))
+        story.append(Spacer(1, 40))
+
+        story.append(Paragraph("_" * 50, texto_style))
+        story.append(Paragraph("Assinatura do Estudante ou Responsável Legal", texto_style))
+
+        if idx < total_alunos - 1:
+            story.append(PageBreak())
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
