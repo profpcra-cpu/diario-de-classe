@@ -1220,11 +1220,12 @@ def gerar_pdf_passes_turma_unificado(df_turma):
     
     if df_turma is not None and not df_turma.empty:
         for idx, row in df_turma.iterrows():
-            nome = row.get('Nome', 'Não informado')
-            matricula = row.get('Matricula', 'N/A')
-            turma = row.get('Turma', 'N/A')
+            # Suporta chaves em minúsculas ou maiúsculas vindas da BD
+            nome = row.get('nome') or row.get('Nome', 'Não informado')
+            matricula = row.get('matricula') or row.get('Matricula', 'N/A')
+            turma = row.get('turma') or row.get('Turma', 'N/A')
             
-            # Bloco visual do passe para o aluno atual (Corrigido para usar styles['Heading2'])
+            # Bloco visual do passe para o aluno atual
             story.append(Paragraph("<b>PASSE ESTUDANTIL - COMPROVANTE</b>", styles['Heading2']))
             story.append(Spacer(1, 10))
             story.append(Paragraph(f"<b>Aluno(a):</b> {nome}", styles['Normal']))
@@ -1238,8 +1239,7 @@ def gerar_pdf_passes_turma_unificado(df_turma):
             
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()
-# ============================================================
+    return buffer.getvalue()# ============================================================
 # 9. RENOVAÇÃO
 # ============================================================
 
