@@ -16,38 +16,8 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from modulos.conexao import executar_query
 
 
-# ============================================================
-# 1. HISTÓRICO ESCOLAR
-# ============================================================
-# -*- coding: utf-8 -*-
-"""
-Gerador do Histórico Escolar Oficial — CEP ETP.
-
-Layout (A4 retrato, 2 páginas):
-  Página 1 — Identificação, Dados, Base Legal, Componentes Curriculares, Totais e Assinaturas
-  Página 2 — Cabeçalho Institucional, Identificação do Estudante, Competências e Habilidades, Termo e Assinaturas
-"""
-
-import io
-import os
-from datetime import datetime
-
-import pandas as pd
-
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    Image, KeepTogether, PageBreak,
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
-
-from modulos.conexao import executar_query
-
-
 # ======================================================================
-# CONSTANTES
+# CONSTANTES E CONFIGURAÇÕES GLOBAIS
 # ======================================================================
 LARGURA_UTIL = 554.0
 MARGEM_LAT   = 20.6
@@ -63,7 +33,6 @@ BASE_LEGAL_PADRAO = (
     "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 02/2023 - CEDF"
 )
 
-# Termos indesejados que devem ser tratados como campos em branco
 VALORES_INVALIDOS = {"", "nan", "none", "null", "não sei", "nao sei", "não informado", "nao informado"}
 
 _COLUNAS_HISTORICO = {
@@ -74,7 +43,7 @@ _COLUNAS_HISTORICO = {
 
 
 # ======================================================================
-# ESTILOS
+# ESTILOS DO HISTÓRICO
 # ======================================================================
 def _build_styles():
     base = getSampleStyleSheet()
@@ -136,7 +105,7 @@ STYLES = _build_styles()
 
 
 # ======================================================================
-# HELPERS
+# HELPERS GERAIS
 # ======================================================================
 def _valor(d, *chaves, padrao=""):
     for chave in chaves:
@@ -246,10 +215,7 @@ def _tabela_campos(linhas, larguras):
 
 
 def _gerar_bloco_identificacao(curso, matricula, turma, nome, cpf, sexo, mae, pai, dt_nasc, nacionalidade, naturalidade, uf, rg, orgao, dt_exp):
-    """Gera o bloco estruturado de identificação acadêmica e dados do estudante."""
     elementos = []
-    
-    # --- Identificação Acadêmica ---
     elementos.append(_bloco_secao("IDENTIFICAÇÃO ACADÊMICA"))
     elementos.append(_tabela_campos(
         [
@@ -264,7 +230,6 @@ def _gerar_bloco_identificacao(curso, matricula, turma, nome, cpf, sexo, mae, pa
     ))
     elementos.append(Spacer(1, 3))
 
-    # --- Dados do Estudante ---
     elementos.append(_bloco_secao("DADOS DO ESTUDANTE"))
     elementos.append(_tabela_campos(
         [
@@ -295,12 +260,10 @@ def _gerar_bloco_identificacao(curso, matricula, turma, nome, cpf, sexo, mae, pa
     return elementos
 
 
-# ======================================================================
-# FUNÇÃO PRINCIPAL
-# ======================================================================
+# ============================================================
+# 1. HISTÓRICO ESCOLAR
+# ============================================================
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """Gera o Histórico Escolar Oficial (2 páginas com dados repetidos)."""
-
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
         df_historico, dados_aluno = dados_aluno, df_historico
 
@@ -345,18 +308,15 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     story = []
 
-    # ============ PÁGINA 1 ============
+    # PÁGINA 1
     story.append(_montar_cabecalho())
     story.append(Paragraph("HISTÓRICO ESCOLAR", STYLES["titulo"]))
-
-    # Insere dados de identificação na página 1
     story.extend(_gerar_bloco_identificacao(
         curso, matricula, turma, nome, cpf, sexo, mae, pai, dt_nasc,
         nacionalidade, naturalidade, uf, rg, orgao, dt_exp
     ))
     story.append(Spacer(1, 3))
 
-    # --- Base Legal ---
     t_base = Table(
         [[Paragraph("BASE LEGAL", STYLES["label"])],
          [Paragraph(base_legal_texto, STYLES["valor"])]],
@@ -373,7 +333,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(t_base)
     story.append(Spacer(1, 4))
 
-    # --- Componentes Curriculares ---
     header = [
         Paragraph("COMPONENTE CURRICULAR", STYLES["th"]),
         Paragraph("SEM.",  STYLES["th"]),
@@ -439,7 +398,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(t_hist)
     story.append(Spacer(1, 3))
 
-    # --- Totais ---
     t_totais = Table([[
         Paragraph(f"T. Teoria: {total_teoria}", STYLES["totais"]),
         Paragraph(f"T. Prática: {total_pratica}", STYLES["totais"]),
@@ -454,7 +412,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(t_totais)
     story.append(Spacer(1, 6))
 
-    # --- Data + Assinaturas (Página 1) ---
     data_doc = f"PLANALTINA-DF, {datetime.now().strftime('%d/%m/%Y')}"
     t_data = Table([[Paragraph(data_doc, STYLES["assinatura"])]],
                    colWidths=[LARGURA_UTIL], hAlign="LEFT")
@@ -473,25 +430,18 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     story.append(KeepTogether([t_data, Spacer(1, 8), assinatura_p1]))
 
-    # ============ PÁGINA 2 ============
+    # PÁGINA 2
     story.append(PageBreak())
     story.append(_montar_cabecalho())
     story.append(Spacer(1, 4))
-
-    # Repete a identificação acadêmica e dados do estudante na página 2
     story.extend(_gerar_bloco_identificacao(
         curso, matricula, turma, nome, cpf, sexo, mae, pai, dt_nasc,
         nacionalidade, naturalidade, uf, rg, orgao, dt_exp
     ))
     story.append(Spacer(1, 6))
 
-    # --- Competências e Habilidades ---
     story.append(_bloco_secao("COMPETÊNCIAS E HABILIDADES"))
-
-    if competencias_texto:
-        comp_html = competencias_texto.replace("\n", "<br/>")
-    else:
-        comp_html = "Nenhuma competência cadastrada para esta turma/sigla."
+    comp_html = competencias_texto.replace("\n", "<br/>") if competencias_texto else "Nenhuma competência cadastrada para esta turma/sigla."
 
     t_comp = Table([[Paragraph(comp_html, STYLES["comp_texto"])]],
                    colWidths=[LARGURA_UTIL], hAlign="LEFT")
@@ -507,7 +457,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(t_comp)
     story.append(Spacer(1, 10))
 
-    # --- Termo de autenticidade ---
     t_autent = Table([[Paragraph(
         "<b>Centro de Educação Profissional - Escola Técnica de Planaltina</b><br/>"
         "Conferido o presente documento, declaramos sua autenticidade e regularidade, "
@@ -534,9 +483,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         assinatura_p1,
     ]))
 
-    # ------------------------------------------------------------------
-    # Rodapé de página (canvas)
-    # ------------------------------------------------------------------
     def _rodape(canvas, doc_):
         canvas.saveState()
         largura, _ = A4
@@ -551,14 +497,13 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_rodape, onLaterPages=_rodape)
-
     buffer.seek(0)
     return buffer.getvalue()
+
 
 # ============================================================
 # 2. MATRIZ AFIN
 # ============================================================
-
 COLUNAS_MATRIZ_POR_PAGINA = 21
 MARGEM_ESQ = 10 * mm
 MARGEM_DIR = 10 * mm
@@ -572,9 +517,8 @@ AZUL_SECUNDARIO = colors.HexColor("#315D82")
 AZUL_MUITO_CLARO = colors.HexColor("#F2F6FA")
 CINZA_TEXTO_AFIN = colors.HexColor("#28343F")
 CINZA_SECUNDARIO = colors.HexColor("#68737D")
-CINZA_ZEBRA = colors.HexColor("#FAFBFC")
 
-def _texto(valor):
+def _texto_afin(valor):
     if valor is None: return ""
     try:
         if pd.isna(valor): return ""
@@ -582,27 +526,27 @@ def _texto(valor):
     texto = str(valor).strip()
     return "" if texto.lower() in {"nan", "nat", "none"} else texto
 
-def _html(valor):
-    return _texto(valor).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+def _html_afin(valor):
+    return _texto_afin(valor).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-def _normalizar(valor):
-    return re.sub(r"\s+", " ", _texto(valor).upper()).strip()
+def _normalizar_afin(valor):
+    return re.sub(r"\s+", " ", _texto_afin(valor).upper()).strip()
 
 def _tipo_coluna(nome):
-    s = _normalizar(nome)
+    s = _normalizar_afin(nome)
     if re.search(r"(?:^|[\s_-])(?:FAL|FALTAS)(?:$|[\s_-])", s): return "FAL"
     if re.search(r"(?:^|[\s_-])(?:CON|CONCEITO)(?:$|[\s_-])", s): return "CON"
     return None
 
 def _nome_uc(nome):
-    return re.sub(r"\s*[-–—]\s*(?:FAL|FALTAS|CON|CONCEITO)\s*$", "", _texto(nome), flags=re.I).strip()
+    return re.sub(r"\s*[-–—]\s*(?:FAL|FALTAS|CON|CONCEITO)\s*$", "", _texto_afin(nome), flags=re.I).strip()
 
 def _mapa_iduc(mapa):
     if not mapa: return {}
     resultado = {}
     for iduc, nome in mapa.items():
-        nome = _texto(nome)
-        if nome: resultado[_normalizar(nome)] = _texto(iduc)
+        nome = _texto_afin(nome)
+        if nome: resultado[_normalizar_afin(nome)] = _texto_afin(iduc)
     return resultado
 
 def _estilos_afin():
@@ -652,9 +596,9 @@ def _topo(largura, st):
     ]))
     return tabela
 
-def _identificacao(largura, turma, semestre, st):
+def _identificacao_afin(largura, turma, semestre, st):
     metade = largura / 2
-    dados = [[Paragraph("TURMA", st["label"]), Paragraph(_html(turma), st["valor"]), Paragraph("SEMESTRE", st["label"]), Paragraph(_html(semestre), st["valor"])]]
+    dados = [[Paragraph("TURMA", st["label"]), Paragraph(_html_afin(turma), st["valor"]), Paragraph("SEMESTRE", st["label"]), Paragraph(_html_afin(semestre), st["valor"])]]
     larguras = [15 * mm, metade - 15 * mm, 20 * mm, metade - 20 * mm]
     tabela = Table(dados, colWidths=larguras, rowHeights=[7 * mm], hAlign="LEFT")
     tabela.setStyle(TableStyle([
@@ -681,10 +625,10 @@ def _cabecalho_afin(bloco, mapa, wm, wn, wc, st):
             linha_indicador.append(Paragraph("", st["indicador"]))
             continue
         uc = _nome_uc(nome_coluna)
-        iduc = mapa.get(_normalizar(uc), "")
+        iduc = mapa.get(_normalizar_afin(uc), "")
         tipo = _tipo_coluna(nome_coluna)
-        linha_uc.append(Paragraph(_html(uc), st["uc"]))
-        linha_iduc.append(Paragraph(_html(iduc), st["iduc"]))
+        linha_uc.append(Paragraph(_html_afin(uc), st["uc"]))
+        linha_iduc.append(Paragraph(_html_afin(iduc), st["iduc"]))
         indicador = "F" if tipo == "FAL" else ("C" if tipo == "CON" else "")
         linha_indicador.append(Paragraph(indicador, st["indicador"]))
 
@@ -696,10 +640,10 @@ def _tabela_afin(df, bloco, mapa, wm, wn, wc, st):
     linhas = list(cabecalho)
 
     for _, row in df.iterrows():
-        linha = [Paragraph(_html(row.iloc[0]), st["matricula"]), Paragraph(_html(row.iloc[1]), st["nome"])]
+        linha = [Paragraph(_html_afin(row.iloc[0]), st["matricula"]), Paragraph(_html_afin(row.iloc[1]), st["nome"])]
         for coluna in bloco:
-            valor = "" if coluna is None else _texto(row.iloc[posicoes[coluna]])
-            linha.append(Paragraph(_html(valor), st["valor_celula"]))
+            valor = "" if coluna is None else _texto_afin(row.iloc[posicoes[coluna]])
+            linha.append(Paragraph(_html_afin(valor), st["valor_celula"]))
         linhas.append(linha)
 
     tabela = Table(linhas, colWidths=larguras, repeatRows=3, hAlign="LEFT")
@@ -743,8 +687,8 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
     df = df_matriz.copy() if df_matriz is not None else pd.DataFrame()
     if not df.empty and len(df.columns) >= 2:
         cols = list(df.columns)
-        if not _texto(cols[0]): cols[0] = "Matrícula"
-        if not _texto(cols[1]): cols[1] = "Estudante"
+        if not _texto_afin(cols[0]): cols[0] = "Matrícula"
+        if not _texto_afin(cols[1]): cols[1] = "Estudante"
         df.columns = cols
 
     buffer = io.BytesIO()
@@ -768,7 +712,7 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
         if numero_bloco > 1: story.append(PageBreak())
         story.append(_topo(largura_util, st))
         story.append(Spacer(1, 1.6 * mm))
-        story.append(_identificacao(largura_util, turma, semestre, st))
+        story.append(_identificacao_afin(largura_util, turma, semestre, st))
         story.append(Spacer(1, 1.7 * mm))
         if df.empty:
             story.append(Paragraph("Nenhum registro disponível.", st["nome"]))
@@ -783,7 +727,6 @@ def gerar_pdf_afin(df_matriz, turma, semestre, mapa_nomes_iduc=None):
 # ============================================================
 # 3. RELATÓRIO DE TURMA
 # ============================================================
-
 def gerar_pdf_relatorio_turma(dados):
     buffer = io.BytesIO()
     buffer.write(b"%PDF-1.4\n% Relatorio da Turma em desenvolvimento\n")
@@ -794,7 +737,6 @@ def gerar_pdf_relatorio_turma(dados):
 # ============================================================
 # 4. DECLARAÇÃO DE ESCOLARIDADE
 # ============================================================
-
 def gerar_pdf_declaracao_escolaridade(dados_aluno):
     def get_dado(dados, *chaves):
         if not isinstance(dados, dict): return ""
@@ -914,7 +856,6 @@ def gerar_pdf_declaracao_escolaridade(dados_aluno):
 # ============================================================
 # 5. PASSE ESTUDANTIL
 # ============================================================
-
 def gerar_pdf_passe_estudantil(dados_aluno):
     def get_dado(dados, *chaves):
         if not isinstance(dados, dict): return ""
@@ -1039,10 +980,9 @@ def gerar_pdf_passe_estudantil(dados_aluno):
     return buffer.getvalue()
 
 
-
-
-
-
+# ============================================================
+# 6. RENOVAÇÃO DE MATRÍCULA (CORRIGIDO COM O RETURN)
+# ============================================================
 def gerar_pdf_renovacao_matricula(dados_aluno):
     def get_dado(dados, *chaves):
         if not isinstance(dados, dict): return ""
@@ -1071,7 +1011,6 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
 
     PAGE_WIDTH = 523
 
-    # Cabeçalho Institucional
     img_gdf = Image("logo_gdf.png", width=45, height=45) if os.path.exists("logo_gdf.png") else Paragraph("", styles["Normal"])
     img_escola = Image("logo_escola.png", width=45, height=45) if os.path.exists("logo_escola.png") else Paragraph("", styles["Normal"])
 
@@ -1088,7 +1027,6 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     story.append(tabela_cabecalho)
     story.append(Spacer(1, 4))
 
-    # Título do Documento
     tabela_titulo = Table([[Paragraph("RENOVAÇÃO DE MATRÍCULA", style_doc_title)]], colWidths=[PAGE_WIDTH])
     tabela_titulo.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E2E8F0")),
@@ -1104,7 +1042,6 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
         v = str(valor) if valor and str(valor).lower() != "none" else ""
         return [Paragraph(rotulo, style_label), Paragraph(f"<b>{v}</b>", style_val)]
 
-    # Extração de dados do aluno
     curso = get_dado(dados_aluno, "curso")
     matricula = get_dado(dados_aluno, "matricula", "matricula_aluno")
     turma = get_dado(dados_aluno, "turma", "turma_turno")
@@ -1126,7 +1063,6 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     cidade = get_dado(dados_aluno, "cidade") or "PLANALTINA"
     cep = get_dado(dados_aluno, "cep")
 
-    # Grelha de Dados Cadastrais
     dados_grid = [
         [celula("Curso:", curso), "", "", "", "", "", "", ""],
         [celula("Matrícula:", matricula), "", celula("Turma/ Turno:", turma), "", celula("Nome:", nome), "", "", celula("Sexo:", sexo)],
@@ -1153,7 +1089,6 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     story.append(tabela_dados)
     story.append(Spacer(1, 4))
 
-    # Bloco de Observações / Perguntas de Renovação
     obs_content = [
         Paragraph("<b>Observações / Requerimento:</b>", style_label),
         Paragraph("1. Deseja renovar a matrícula para o 2º semestre de 2026? &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] Sim &nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] Não", style_obs),
@@ -1173,7 +1108,6 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     story.append(tabela_obs)
     story.append(Spacer(1, 4))
 
-    # Seção de Atualização de Endereço / Outros Dados
     atualizacao_header = Table([[Paragraph("<b>Atualização de Endereço / Outros Dados</b> (Preencha somente se houver alteração)", style_label)]], colWidths=[PAGE_WIDTH])
     atualizacao_header.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#E2E8F0")),
@@ -1193,10 +1127,8 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     story.append(tabela_atualizacao)
     story.append(Spacer(1, 10))
 
-    # Data e Assinatura do Estudante
-    data_atual = datetime.now().strftime("%d/%m/%Y")
     tabela_rodape = Table([
-        [Paragraph(f"Planaltina-DF, _____ de ______________________ de 2026.", style_obs)],
+        [Paragraph("Planaltina-DF, _____ de ______________________ de 2026.", style_obs)],
         [Spacer(1, 20)],
         [Paragraph("_____________________________________________________<br/><b>Assinatura do Estudante / Responsável</b>", ParagraphStyle("Sig", fontName="Helvetica", fontSize=8, alignment=1))]
     ], colWidths=[PAGE_WIDTH])
@@ -1208,8 +1140,13 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     ]))
     story.append(tabela_rodape)
 
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()  # <--- CORREÇÃO APLICADA AQUI
+
+
 # ============================================================
-# 4. PASSES TURMA UNIFICADO
+# 7. PASSES TURMA UNIFICADO
 # ============================================================
 def gerar_pdf_passes_turma_unificado(dados_turma):
     buffer = io.BytesIO()
@@ -1217,11 +1154,11 @@ def gerar_pdf_passes_turma_unificado(dados_turma):
     story = [Paragraph("Relatório de Passes da Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()  # Garante o retorno dos bytes
+    return buffer.getvalue()
 
 
 # ============================================================
-# 6. RENOVAÇÃO TURMA UNIFICADO
+# 8. RENOVAÇÃO TURMA UNIFICADO
 # ============================================================
 def gerar_pdf_renovacao_turma_unificado(dados_turma):
     buffer = io.BytesIO()
@@ -1229,5 +1166,4 @@ def gerar_pdf_renovacao_turma_unificado(dados_turma):
     story = [Paragraph("Relatório de Renovação de Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()  # Garante o retorno dos bytes
-
+    return buffer.getvalue()
