@@ -275,7 +275,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     )
 
     # ------------------------------------------------------------------
-    # Dados do aluno
+    # Dados do aluno (com mapeamento ampliado de chaves alternativas)
     # ------------------------------------------------------------------
     if isinstance(dados_aluno, dict):
         d = dados_aluno
@@ -284,22 +284,22 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     else:
         d = {}
 
-    curso        = _valor(d, "curso", padrao="TÉCNICO EM ENFERMAGEM").upper()
-    matricula    = _valor(d, "matricula", "matrícula")
-    turma        = _valor(d, "turma")
-    sigla        = _valor(d, "sigla")
-    nome         = _valor(d, "nome").upper()
-    cpf          = _valor(d, "cpf")
-    sexo         = _valor(d, "sexo").upper()
-    mae          = _valor(d, "mae", "nome_mae").upper()
-    pai          = _valor(d, "pai", "nome_pai").upper()
-    dt_nasc      = _valor(d, "data_nascimento")
-    nacionalidade = _valor(d, "nacionalidade", padrao="BRASILEIRA").upper()
-    naturalidade = _valor(d, "naturalidade").upper()
-    uf           = _valor(d, "uf", padrao="DF").upper()
-    rg           = _valor(d, "rg")
-    orgao        = _valor(d, "orgao_expeditor").upper()
-    dt_exp       = _valor(d, "data_expedicao")
+    curso         = _valor(d, "curso", padrao="TÉCNICO EM ENFERMAGEM").upper()
+    matricula     = _valor(d, "matricula", "matrícula")
+    turma         = _valor(d, "turma")
+    sigla         = _valor(d, "sigla")
+    nome          = _valor(d, "nome", "nome_aluno").upper()
+    cpf           = _valor(d, "cpf")
+    sexo          = _valor(d, "sexo").upper()
+    mae           = _valor(d, "mae", "nome_mae", "nome_da_mae").upper()
+    pai           = _valor(d, "pai", "nome_pai", "nome_do_pai").upper()
+    dt_nasc       = _valor(d, "data_nascimento", "dt_nascimento", "nascimento", "data_nasc")
+    nacionalidade = _valor(d, "nacionalidade", "nacionalidade_aluno", padrao="BRASILEIRA").upper()
+    naturalidade  = _valor(d, "naturalidade", "naturalidade_aluno").upper()
+    uf            = _valor(d, "uf", "uf_naturalidade", "uf_nascimento", padrao="DF").upper()
+    rg            = _valor(d, "rg", "registro_geral", "num_rg")
+    orgao         = _valor(d, "orgao_expeditor", "orgao", "orgao_exp").upper()
+    dt_exp        = _valor(d, "data_expedicao", "dt_expedicao", "data_exp")
 
     base_legal_texto, competencias_texto = _buscar_base_legal(sigla, turma)
 
@@ -544,77 +544,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     doc.build(story, onFirstPage=_rodape, onLaterPages=_rodape)
 
-    buffer.seek(0)
-    return buffer.getvalue()
-    # =========================================================================
-    # PÁGINA 2: Competências e Habilidades + Rodapé de Autenticidade e Assinaturas
-    # =========================================================================
-    story.append(PageBreak())
-
-    story.append(cabecalho)
-    story.append(Spacer(1, 4))
-    story.append(bloco_secao("COMPETÊNCIAS E HABILIDADES"))
-    
-    if competencias_texto:
-        comp_formatado = competencias_texto.replace("\n", "<br/>")
-        tabela_comp = Table([[Paragraph(comp_formatado, estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
-    else:
-        tabela_comp = Table([[Paragraph("Nenhuma competência cadastrada para esta turma/sigla.", estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
-        
-    tabela_comp.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#1A365D")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    story.append(tabela_comp)
-    story.append(Spacer(1, 15))
-
-    rodape_autenticidade = Table([[
-        Paragraph("<b>Centro de Educação Profissional - Escola Técnica de Planaltina</b><br/>"
-                  "Conferido o presente documento, declaramos sua autenticidade e regularidade, "
-                  "de acordo com os registros escolares e com a legislação vigente.", estilo_rodape)
-    ]], colWidths=[554], hAlign="LEFT")
-    rodape_autenticidade.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.5, PRETO),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-
-    data_tabela_p2 = Table([[Paragraph(data_documento, estilo_assinatura)]], colWidths=[554], hAlign="LEFT")
-    data_tabela_p2.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-    ]))
-
-    bloco_final_p2 = KeepTogether([
-        rodape_autenticidade,
-        Spacer(1, 6),
-        data_tabela_p2,
-        Spacer(1, 15),
-        assinatura
-    ])
-    story.append(bloco_final_p2)
-
-    def desenhar_rodape(canvas, doc):
-        canvas.saveState()
-        largura, _ = A4
-        canvas.setStrokeColor(CINZA_LINHA)
-        canvas.setLineWidth(0.4)
-        canvas.line(doc.leftMargin, 16, largura - doc.rightMargin, 16)
-        canvas.setFont("Helvetica", 6)
-        canvas.setFillColor(CINZA_MEDIO)
-        canvas.drawString(doc.leftMargin, 8, "Centro de Educação Profissional Escola Técnica de Planaltina")
-        canvas.drawRightString(largura - doc.rightMargin, 8, f"Página {doc.page}")
-        canvas.restoreState()
-
-    doc.build(story, onFirstPage=desenhar_rodape, onLaterPages=desenhar_rodape)
     buffer.seek(0)
     return buffer.getvalue()
 # ============================================================
