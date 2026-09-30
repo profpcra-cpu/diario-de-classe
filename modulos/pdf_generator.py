@@ -31,15 +31,15 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 from modulos.conexao import executar_query
 
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     """
     Gera o Histórico Escolar Oficial em A4, com diagramação institucional,
-    alinhamento rigoroso de colunas, quebra de página forçada para Competências
-    e repetição do cabeçalho na segunda página.
+    alinhamento rigoroso de colunas, separação correta entre disciplinas (Página 1)
+    e competências/habilidades (Página 2) conforme o modelo esperado.
     """
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
         df_historico, dados_aluno = dados_aluno, df_historico
@@ -98,6 +98,9 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     
     estilo_comp_texto = ParagraphStyle(
         "CompTexto", parent=styles["Normal"], fontName="Helvetica", fontSize=6.8, leading=8.5, alignment=TA_LEFT, textColor=CINZA_TEXTO
+    )
+    estilo_totais = ParagraphStyle(
+        "Totais", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7, leading=8, alignment=TA_CENTER, textColor=PRETO
     )
 
     if isinstance(dados_aluno, dict):
@@ -194,8 +197,14 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ]))
         return t
 
-    # --- PÁGINA 1 ---
-    story = [cabecalho, Paragraph("HISTÓRICO ESCOLAR", estilo_titulo), bloco_secao("IDENTIFICAÇÃO ACADÊMICA")]
+    story = []
+
+    # =========================================================================
+    # PÁGINA 1: Identificação, Dados, Base Legal, Componentes Curriculares e Totais
+    # =========================================================================
+    story.append(cabecalho)
+    story.append(Paragraph("HISTÓRICO ESCOLAR", estilo_titulo))
+    story.append(bloco_secao("IDENTIFICAÇÃO ACADÊMICA"))
     
     identificacao = [
         [Paragraph("CURSO", estilo_label), Paragraph("MATRÍCULA", estilo_label), Paragraph("TURMA / TURNO", estilo_label)],
@@ -214,34 +223,25 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         [Paragraph(nacionalidade or "—", estilo_valor), Paragraph(f"{naturalidade} / {uf}".strip(" /") or "—", estilo_valor), Paragraph(" ".join(x for x in [rg, orgao, dt_exp] if x) or "—", estilo_valor)],
     ]
     story.append(tabela_campos(dados_estudante, [300, 120, 134]))
-    
-    # --- QUEBRA DE PÁGINA PARA A SEGUNDA PÁGINA ---
-    story.append(PageBreak())
+    story.append(Spacer(1, 3))
 
-    # --- PÁGINA 2 (Repete o cabeçalho institucional no topo) ---
-    story.append(cabecalho)
-    story.append(Spacer(1, 4))
-
-    story.append(bloco_secao("COMPETÊNCIAS E HABILIDADES"))
-    
-    if competencias_texto:
-        comp_formatado = competencias_texto.replace("\n", "<br/>")
-        tabela_comp = Table([[Paragraph(comp_formatado, estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
-    else:
-        tabela_comp = Table([[Paragraph("Nenhuma competência cadastrada para esta turma/sigla.", estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
-        
-    tabela_comp.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#1A365D")),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    # Bloco de Base Legal na Página 1 (conforme modelo esperado)
+    t_base_legal = Table([
+        [Paragraph("BASE LEGAL", estilo_label)],
+        [Paragraph(base_legal_texto, estilo_valor)]
+    ], colWidths=[554], hAlign="LEFT")
+    t_base_legal.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.35, CINZA_LINHA),
+        ("BACKGROUND", (0, 0), (-1, 0), CINZA_CAB),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
-    story.append(tabela_comp)
+    story.append(t_base_legal)
     story.append(Spacer(1, 4))
 
+    # Tabela de Componentes Curriculares
     header_hist = [
         Paragraph("COMPONENTE CURRICULAR", estilo_th),
         Paragraph("SEM.", estilo_th),
@@ -252,15 +252,29 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     ]
     tabela_hist_dados = [header_hist]
 
+    total_teoria = 0
+    total_pratica = 0
+
     if df_historico is not None and not df_historico.empty:
         for _, row in df_historico.iterrows():
             comp = str(row.get("unidade_curricular", row.get("componente", row.get("disciplina", "---"))))
             sem = str(row.get("semestre", "")).strip()
+            ch_val = row.get("carga_horaria", row.get("ch", 0))
+            try:
+                ch_num = int(ch_val) if pd.notnull(ch_val) and str(ch_val).isdigit() else 0
+            except:
+                ch_num = 0
+
+            mod = str(row.get("modulo", "Teoria"))
+            if "prática" in mod.lower():
+                total_pratica += ch_num
+            else:
+                total_teoria += ch_num
+
             if not sem or sem.lower() in ("none", "nan", ""):
                 sem, ch, mod, faltas, res = "", "", "", "", ""
             else:
-                ch = str(row.get("carga_horaria", row.get("ch", "")))
-                mod = str(row.get("modulo", ""))
+                ch = str(ch_val)
                 faltas = str(row.get("faltas", "0"))
                 res = str(row.get("resultado", row.get("conceito", "")))
 
@@ -286,21 +300,24 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
             estilo_hist.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#FAFAFA")))
     t_hist.setStyle(TableStyle(estilo_hist))
     story.append(t_hist)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 2))
 
-    rodape_autenticidade = Table([[
-        Paragraph("<b>Centro de Educação Profissional - Escola Técnica de Planaltina</b><br/>"
-                  "Conferido o presente documento, declaramos sua autenticidade e regularidade, "
-                  "de acordo com os registros escolares e com a legislação vigente.", estilo_rodape)
-    ]], colWidths=[554], hAlign="LEFT")
-    rodape_autenticidade.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 0.5, PRETO),
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    # Tabela de Totais e Assinaturas da Página 1
+    tabela_totais = Table([
+        [
+            Paragraph(f"T. Teoria: {total_teoria}", estilo_totais),
+            Paragraph(f"T. Prática: {total_pratica}", estilo_totais)
+        ]
+    ], colWidths=[277, 277], hAlign="LEFT")
+    tabela_totais.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, PRETO),
+        ("BACKGROUND", (0, 0), (-1, -1), CINZA_CAB),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
     ]))
+    story.append(tabela_totais)
+    story.append(Spacer(1, 4))
 
     data_documento = f"PLANALTINA-DF, {datetime.now().strftime('%d/%m/%Y')}"
     data_tabela = Table([[Paragraph(data_documento, estilo_assinatura)]], colWidths=[554], hAlign="LEFT")
@@ -320,15 +337,68 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
     ]))
 
-    bloco_final = KeepTogether([
-        Spacer(1, 4),
-        rodape_autenticidade,
-        Spacer(1, 4),
+    bloco_final_p1 = KeepTogether([
         data_tabela,
+        Spacer(1, 10),
+        assinatura
+    ])
+    story.append(bloco_final_p1)
+
+    # =========================================================================
+    # PÁGINA 2: Competências e Habilidades + Rodapé de Autenticidade e Assinaturas
+    # =========================================================================
+    story.append(PageBreak())
+
+    story.append(cabecalho)
+    story.append(Spacer(1, 4))
+    story.append(bloco_secao("COMPETÊNCIAS E HABILIDADES"))
+    
+    if competencias_texto:
+        comp_formatado = competencias_texto.replace("\n", "<br/>")
+        tabela_comp = Table([[Paragraph(comp_formatado, estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
+    else:
+        tabela_comp = Table([[Paragraph("Nenhuma competência cadastrada para esta turma/sigla.", estilo_comp_texto)]], colWidths=[554], hAlign="LEFT")
+        
+    tabela_comp.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#1A365D")),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(tabela_comp)
+    story.append(Spacer(1, 15))
+
+    rodape_autenticidade = Table([[
+        Paragraph("<b>Centro de Educação Profissional - Escola Técnica de Planaltina</b><br/>"
+                  "Conferido o presente documento, declaramos sua autenticidade e regularidade, "
+                  "de acordo com os registros escolares e com a legislação vigente.", estilo_rodape)
+    ]], colWidths=[554], hAlign="LEFT")
+    rodape_autenticidade.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.5, PRETO),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFFFFF")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+
+    data_tabela_p2 = Table([[Paragraph(data_documento, estilo_assinatura)]], colWidths=[554], hAlign="LEFT")
+    data_tabela_p2.setStyle(TableStyle([
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+
+    bloco_final_p2 = KeepTogether([
+        rodape_autenticidade,
+        Spacer(1, 6),
+        data_tabela_p2,
         Spacer(1, 15),
         assinatura
     ])
-    story.append(bloco_final)
+    story.append(bloco_final_p2)
 
     def desenhar_rodape(canvas, doc):
         canvas.saveState()
