@@ -180,6 +180,14 @@ def renderizar_modulo_secretaria():
 
                     dados_originais = df_dados_pessoais.iloc[0].to_dict()
 
+                    # Inicialização prévia de variáveis opcionais para evitar NameError
+                    edit_mae = str(dados_originais.get("nome_mae", ""))
+                    edit_pai = str(dados_originais.get("nome_pai", ""))
+                    edit_nacionalidade = str(dados_originais.get("nacionalidade", "BRASILEIRA"))
+                    edit_naturalidade = str(dados_originais.get("naturalidade", "PLANALTINA"))
+                    edit_uf_nat = str(dados_originais.get("uf", "DF"))
+                    edit_observacao_doc = "Documento emitido conforme registos da instituição."
+
                     with st.form(key=f"form_edicao_doc_{matricula_busca}"):
                         st.markdown(f"**A ajustar parâmetros para:** `{tipo_documento}`")
                         
@@ -224,8 +232,6 @@ def renderizar_modulo_secretaria():
                             )
                         elif tipo_documento == "Passe Estudantil":
                             edit_observacao_doc = "Declaração válida por 30 dias para efeitos de Passe Estudantil."
-                        else:
-                            edit_observacao_doc = "Documento emitido conforme registos da instituição."
 
                         botao_gerar_editado = st.form_submit_button("✨ Gerar PDF com Dados Editados")
 
