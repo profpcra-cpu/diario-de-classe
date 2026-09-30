@@ -19,14 +19,13 @@ from modulos.conexao import executar_query
 # ============================================================
 # 1. HISTÓRICO ESCOLAR
 # ============================================================
-
 # -*- coding: utf-8 -*-
 """
 Gerador do Histórico Escolar Oficial — CEP ETP.
 
 Layout (A4 retrato, 2 páginas):
   Página 1 — Identificação, Dados, Base Legal, Componentes Curriculares, Totais e Assinaturas
-  Página 2 — Competências e Habilidades, Termo de Autenticidade e Assinaturas
+  Página 2 — Cabeçalho Institucional, Identificação do Estudante, Competências e Habilidades, Termo e Assinaturas
 """
 
 import io
@@ -64,7 +63,8 @@ BASE_LEGAL_PADRAO = (
     "LEI Nº 9.394/96, DECRETO Nº 5.154/2004, RESOLUÇÃO Nº 02/2023 - CEDF"
 )
 
-VALORES_INVALIDOS = {"", "nan", "none", "null"}
+# Termos indesejados que devem ser tratados como campos em branco
+VALORES_INVALIDOS = {"", "nan", "none", "null", "não sei", "nao sei", "não informado", "nao informado"}
 
 _COLUNAS_HISTORICO = {
     "componente": ("unidade_curricular", "componente", "disciplina"),
@@ -74,7 +74,7 @@ _COLUNAS_HISTORICO = {
 
 
 # ======================================================================
-# ESTILOS (uma vez por processo)
+# ESTILOS
 # ======================================================================
 def _build_styles():
     base = getSampleStyleSheet()
@@ -141,16 +141,20 @@ STYLES = _build_styles()
 def _valor(d, *chaves, padrao=""):
     for chave in chaves:
         v = d.get(chave)
-        if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
-            return str(v).strip()
+        if v is not None:
+            texto = str(v).strip()
+            if texto.lower() not in VALORES_INVALIDOS:
+                return texto
     return padrao
 
 
 def _row_get(row, chaves, padrao=""):
     for chave in chaves:
         v = row.get(chave)
-        if v is not None and str(v).strip().lower() not in VALORES_INVALIDOS:
-            return v
+        if v is not None:
+            texto = str(v).strip()
+            if texto.lower() not in VALORES_INVALIDOS:
+                return v
     return padrao
 
 
@@ -161,7 +165,6 @@ def _carregar_logo(path, width=42, height=42):
 
 
 def _buscar_base_legal(sigla, turma):
-    """Retorna (base_legal, competencias_habilidades)."""
     if not (sigla or turma):
         return BASE_LEGAL_PADRAO, ""
 
@@ -185,16 +188,6 @@ def _buscar_base_legal(sigla, turma):
     return BASE_LEGAL_PADRAO, ""
 
 
-def _celula_campo(rotulo, valor_txt, negrito=False):
-    return [
-        Paragraph(rotulo, STYLES["label"]),
-        Paragraph(valor_txt or "—", STYLES["valor_bold" if negrito else "valor"]),
-    ]
-
-
-# ======================================================================
-# CABEÇALHO INSTITUCIONAL
-# ======================================================================
 def _montar_cabecalho():
     textos = [
         Paragraph("GOVERNO DO DISTRITO FEDERAL", STYLES["institucional_bold"]),
@@ -252,11 +245,61 @@ def _tabela_campos(linhas, larguras):
     return t
 
 
+def _gerar_bloco_identificacao(curso, matricula, turma, nome, cpf, sexo, mae, pai, dt_nasc, nacionalidade, naturalidade, uf, rg, orgao, dt_exp):
+    """Gera o bloco estruturado de identificação acadêmica e dados do estudante."""
+    elementos = []
+    
+    # --- Identificação Acadêmica ---
+    elementos.append(_bloco_secao("IDENTIFICAÇÃO ACADÊMICA"))
+    elementos.append(_tabela_campos(
+        [
+            [Paragraph("CURSO", STYLES["label"]),
+             Paragraph("MATRÍCULA", STYLES["label"]),
+             Paragraph("TURMA / TURNO", STYLES["label"])],
+            [Paragraph(curso or "—", STYLES["valor_bold"]),
+             Paragraph(matricula or "—", STYLES["valor"]),
+             Paragraph(turma or "—", STYLES["valor"])],
+        ],
+        [330, 110, 114],
+    ))
+    elementos.append(Spacer(1, 3))
+
+    # --- Dados do Estudante ---
+    elementos.append(_bloco_secao("DADOS DO ESTUDANTE"))
+    elementos.append(_tabela_campos(
+        [
+            [Paragraph("NOME", STYLES["label"]),
+             Paragraph("CPF", STYLES["label"]),
+             Paragraph("SEXO", STYLES["label"])],
+            [Paragraph(nome or "—", STYLES["valor_bold"]),
+             Paragraph(cpf or "—", STYLES["valor"]),
+             Paragraph(sexo or "—", STYLES["valor"])],
+
+            [Paragraph("NOME DA MÃE", STYLES["label"]),
+             Paragraph("NOME DO PAI", STYLES["label"]),
+             Paragraph("DATA DE NASCIMENTO", STYLES["label"])],
+            [Paragraph(mae or "—", STYLES["valor"]),
+             Paragraph(pai or "—", STYLES["valor"]),
+             Paragraph(dt_nasc or "—", STYLES["valor"])],
+
+            [Paragraph("NACIONALIDADE", STYLES["label"]),
+             Paragraph("NATURALIDADE / UF", STYLES["label"]),
+             Paragraph("RG / ÓRGÃO / EXPEDIÇÃO", STYLES["label"])],
+            [Paragraph(nacionalidade or "—", STYLES["valor"]),
+             Paragraph(f"{naturalidade} / {uf}".strip(" /") or "—", STYLES["valor"]),
+             Paragraph(" ".join(x for x in (rg, orgao, dt_exp) if x) or "—",
+                       STYLES["valor"])],
+        ],
+        [300, 120, 134],
+    ))
+    return elementos
+
+
 # ======================================================================
 # FUNÇÃO PRINCIPAL
 # ======================================================================
 def gerar_pdf_historico_aluno(df_historico, dados_aluno):
-    """Gera o Histórico Escolar Oficial (2 páginas)."""
+    """Gera o Histórico Escolar Oficial (2 páginas com dados repetidos)."""
 
     if isinstance(df_historico, dict) and isinstance(dados_aluno, pd.DataFrame):
         df_historico, dados_aluno = dados_aluno, df_historico
@@ -274,9 +317,6 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         author="Centro de Educação Profissional Escola Técnica de Planaltina",
     )
 
-    # ------------------------------------------------------------------
-    # Dados do aluno (com mapeamento ampliado de chaves alternativas)
-    # ------------------------------------------------------------------
     if isinstance(dados_aluno, dict):
         d = dados_aluno
     elif hasattr(dados_aluno, "iloc") and not dados_aluno.empty:
@@ -303,57 +343,16 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
 
     base_legal_texto, competencias_texto = _buscar_base_legal(sigla, turma)
 
-    # ------------------------------------------------------------------
-    # Monta Story
-    # ------------------------------------------------------------------
     story = []
 
     # ============ PÁGINA 1 ============
     story.append(_montar_cabecalho())
     story.append(Paragraph("HISTÓRICO ESCOLAR", STYLES["titulo"]))
 
-    # --- Identificação Acadêmica ---
-    story.append(_bloco_secao("IDENTIFICAÇÃO ACADÊMICA"))
-    story.append(_tabela_campos(
-        [
-            [Paragraph("CURSO", STYLES["label"]),
-             Paragraph("MATRÍCULA", STYLES["label"]),
-             Paragraph("TURMA / TURNO", STYLES["label"])],
-            [Paragraph(curso or "—", STYLES["valor_bold"]),
-             Paragraph(matricula or "—", STYLES["valor"]),
-             Paragraph(turma or "—", STYLES["valor"])],
-        ],
-        [330, 110, 114],
-    ))
-    story.append(Spacer(1, 3))
-
-    # --- Dados do Estudante ---
-    story.append(_bloco_secao("DADOS DO ESTUDANTE"))
-    story.append(_tabela_campos(
-        [
-            [Paragraph("NOME", STYLES["label"]),
-             Paragraph("CPF", STYLES["label"]),
-             Paragraph("SEXO", STYLES["label"])],
-            [Paragraph(nome or "—", STYLES["valor_bold"]),
-             Paragraph(cpf or "—", STYLES["valor"]),
-             Paragraph(sexo or "—", STYLES["valor"])],
-
-            [Paragraph("NOME DA MÃE", STYLES["label"]),
-             Paragraph("NOME DO PAI", STYLES["label"]),
-             Paragraph("DATA DE NASCIMENTO", STYLES["label"])],
-            [Paragraph(mae or "—", STYLES["valor"]),
-             Paragraph(pai or "—", STYLES["valor"]),
-             Paragraph(dt_nasc or "—", STYLES["valor"])],
-
-            [Paragraph("NACIONALIDADE", STYLES["label"]),
-             Paragraph("NATURALIDADE / UF", STYLES["label"]),
-             Paragraph("RG / ÓRGÃO / EXPEDIÇÃO", STYLES["label"])],
-            [Paragraph(nacionalidade or "—", STYLES["valor"]),
-             Paragraph(f"{naturalidade} / {uf}".strip(" /") or "—", STYLES["valor"]),
-             Paragraph(" ".join(x for x in (rg, orgao, dt_exp) if x) or "—",
-                       STYLES["valor"])],
-        ],
-        [300, 120, 134],
+    # Insere dados de identificação na página 1
+    story.extend(_gerar_bloco_identificacao(
+        curso, matricula, turma, nome, cpf, sexo, mae, pai, dt_nasc,
+        nacionalidade, naturalidade, uf, rg, orgao, dt_exp
     ))
     story.append(Spacer(1, 3))
 
@@ -478,6 +477,15 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
     story.append(PageBreak())
     story.append(_montar_cabecalho())
     story.append(Spacer(1, 4))
+
+    # Repete a identificação acadêmica e dados do estudante na página 2
+    story.extend(_gerar_bloco_identificacao(
+        curso, matricula, turma, nome, cpf, sexo, mae, pai, dt_nasc,
+        nacionalidade, naturalidade, uf, rg, orgao, dt_exp
+    ))
+    story.append(Spacer(1, 6))
+
+    # --- Competências e Habilidades ---
     story.append(_bloco_secao("COMPETÊNCIAS E HABILIDADES"))
 
     if competencias_texto:
@@ -497,7 +505,7 @@ def gerar_pdf_historico_aluno(df_historico, dados_aluno):
         ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
     ]))
     story.append(t_comp)
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 10))
 
     # --- Termo de autenticidade ---
     t_autent = Table([[Paragraph(
