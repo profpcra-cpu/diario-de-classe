@@ -1271,5 +1271,3 @@ def gerar_pdf_renovacao_turma_unificado(df_turma):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
-V
