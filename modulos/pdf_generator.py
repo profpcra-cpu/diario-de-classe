@@ -1208,10 +1208,8 @@ def gerar_pdf_renovacao_matricula(dados_aluno):
     ]))
     story.append(tabela_rodape)
 
-
-
-    # ============================================================
-# PASSES TURMA UNIFICADO
+# ============================================================
+# 4. PASSES TURMA UNIFICADO
 # ============================================================
 def gerar_pdf_passes_turma_unificado(dados_turma):
     buffer = io.BytesIO()
@@ -1219,16 +1217,11 @@ def gerar_pdf_passes_turma_unificado(dados_turma):
     story = [Paragraph("Relatório de Passes da Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
-
+    return buffer.getvalue()  # Garante o retorno dos bytes
 
 
 # ============================================================
-# RENOVAÇÃO TURMA UNIFICADO
+# 6. RENOVAÇÃO TURMA UNIFICADO
 # ============================================================
 def gerar_pdf_renovacao_turma_unificado(dados_turma):
     buffer = io.BytesIO()
@@ -1236,4 +1229,5 @@ def gerar_pdf_renovacao_turma_unificado(dados_turma):
     story = [Paragraph("Relatório de Renovação de Turma (Unificado)", getSampleStyleSheet()["Heading1"])]
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()
+    return buffer.getvalue()  # Garante o retorno dos bytes
+
