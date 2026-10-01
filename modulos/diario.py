@@ -59,12 +59,13 @@ def renderizar_modulo_notas():
     except Exception as e:
         st.error(f"Erro ao gerir avaliações: {e}")
 
+
 def renderizar_modulo_diario_frequencia():
     st.subheader("📖 Diário de Classe Dinâmico por Data")
     perfil_atual = st.session_state.get("perfil", "professor")
     email_atual = st.session_state.get("email_utilizador", "")
     
-    # Obtenção de turmas e IDUCs permitidos
+    # 1. Busca turmas e IDUCs autorizados na TB_PROFESSORES
     if perfil_atual == "admin":
         df_turmas = executar_query("SELECT DISTINCT turma FROM TB_PROFESSORES")
         df_iducs = executar_query("SELECT DISTINCT iduc FROM TB_PROFESSORES")
@@ -89,62 +90,106 @@ def renderizar_modulo_diario_frequencia():
         
     if st.button("➕ Registar Nova Aula"):
         try:
-            sql_nova_aula = "INSERT INTO TB_AULAS (turma, iduc, data, aulas_previstas) VALUES (%s, %s, %s, %s)"
+            sql_nova_aula = "INSERT INTO TB_DIARIO (turma, iduc, data, aulas_previstas) VALUES (%s, %s, %s, %s)"
             executar_query(sql_nova_aula, params=(turma_diario, iduc_diario, str(nova_data_aula), 4), fetch=False)
-            st.success(f"Aula do dia {nova_data_aula} registrada com sucesso!")
+            st.success(f"Aula do dia {nova_data_aula} registrada com sucesso na TB_DIARIO!")
             st.rerun()
         except Exception as e:
-            st.error(f"Erro ao registar aula: {e}")
+            st.error(f"Erro ao registar aula em TB_DIARIO: {e}")
             
     st.markdown("---")
     tab1, tab2 = st.tabs(["📝 Procedimentos e Competências", "👥 Matriz de Frequência por Datas"])
     
     with tab1:
         st.markdown("### Registo Pedagógico da Aula Selecionada")
-        # Busca registro pedagógico existente para a turma/IDUC/data
-        sql_reg = "SELECT procedimentos, competencias FROM TB_AULAS WHERE turma = %s AND iduc = %s AND data = %s"
-        df_reg = executar_query(sql_reg, params=(turma_diario, iduc_diario, str(nova_data_aula)))
+        proc_init, comp_init = "", ""
         
-        proc_init = df_reg['procedimentos'].iloc[0] if not df_reg.empty and df_reg['procedimentos'].iloc[0] else ""
-        comp_init = df_reg['competencias'].iloc[0] if not df_reg.empty and df_reg['competencias'].iloc[0] else ""
+        # Consulta de registros pedagógicos nas tabelas TB_PROCEDIMENTOS e TB_COMPETENCIAS
+        try:
+            sql_p = "SELECT texto FROM TB_PROCEDIMENTOS WHERE turma = %s AND iduc = %s AND data = %s LIMIT 1"
+            df_p = executar_query(sql_p, params=(turma_diario, iduc_diario, str(nova_data_aula)))
+            if not df_p.empty:
+                proc_init = df_p['texto'].iloc[0] or ""
+
+            sql_c = "SELECT texto FROM TB_COMPETENCIAS WHERE turma = %s AND iduc = %s AND data = %s LIMIT 1"
+            df_c = executar_query(sql_c, params=(turma_diario, iduc_diario, str(nova_data_aula)))
+            if not df_c.empty:
+                comp_init = df_c['texto'].iloc[0] or ""
+        except Exception as e_pedagogico:
+            st.info("Aguardando preenchimento dos registros pedagógicos para esta aula.")
 
         procedimentos = st.text_area("Procedimentos Metodológicos adotados:", value=proc_init, key="txt_proc")
         competencias = st.text_area("Competências / Habilidades desenvolvidas:", value=comp_init, key="txt_comp")
         
         if st.button("💾 Guardar Registo Pedagógico"):
-            sql_upd_reg = "UPDATE TB_AULAS SET procedimentos = %s, competencias = %s WHERE turma = %s AND iduc = %s AND data = %s"
-            executar_query(sql_upd_reg, params=(procedimentos, competencias, turma_diario, iduc_diario, str(nova_data_aula)), fetch=False)
-            st.success("Registo pedagógico atualizado com sucesso!")
+            try:
+                # Gravação/Atualização em TB_PROCEDIMENTOS
+                sql_upd_proc = """
+                    INSERT INTO TB_PROCEDIMENTOS (turma, iduc, data, texto) 
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE texto = VALUES(texto)
+                """
+                executar_query(sql_upd_proc, params=(turma_diario, iduc_diario, str(nova_data_aula), procedimentos), fetch=False)
+                
+                # Gravação/Atualização em TB_COMPETENCIAS
+                sql_upd_comp = """
+                    INSERT INTO TB_COMPETENCIAS (turma, iduc, data, texto) 
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE texto = VALUES(texto)
+                """
+                executar_query(sql_upd_comp, params=(turma_diario, iduc_diario, str(nova_data_aula), competencias), fetch=False)
+                
+                st.success("Procedimentos e Competências gravados com sucesso!")
+            except Exception as e:
+                st.error(f"Erro ao guardar registro pedagógico: {e}")
 
     with tab2:
         st.markdown("### Controlo de Presenças")
         try:
-            # Busca os alunos matriculados na turma
-            df_alunos = executar_query("SELECT matricula, nome FROM TB_ALUNOS WHERE turma = %s", params=(turma_diario,))
+            # Lista de estudantes cadastrados da turma via TB_PESSOAS
+            df_alunos = executar_query(
+                "SELECT matricula, nome FROM TB_PESSOAS WHERE turma = %s AND perfil = 'aluno'", 
+                params=(turma_diario,)
+            )
             
             if df_alunos.empty:
-                st.warning("Nenhum aluno encontrado para a turma selecionada.")
+                # Fallback genérico de alunos
+                df_alunos = executar_query("SELECT DISTINCT matricula FROM TB_AVALIACOES WHERE turma = %s", params=(turma_diario,))
+            
+            if df_alunos.empty:
+                st.warning("Nenhum aluno cadastrado encontrado para esta turma.")
             else:
-                df_datas = executar_query("SELECT DISTINCT data FROM TB_AULAS WHERE turma = %s AND iduc = %s", params=(turma_diario, iduc_diario))
+                # Datas de aulas registradas na TB_DIARIO
+                df_datas = executar_query(
+                    "SELECT DISTINCT data FROM TB_DIARIO WHERE turma = %s AND iduc = %s ORDER BY data", 
+                    params=(turma_diario, iduc_diario)
+                )
                 lista_datas = df_datas['data'].astype(str).tolist() if not df_datas.empty else [str(nova_data_aula)]
                 
                 df_matriz_freq = df_alunos.copy()
                 for d in lista_datas:
                     df_matriz_freq[f"Aula: {d}"] = True
                 
-                df_editado = st.data_editor(df_matriz_freq, use_container_width=True, key="editor_freq_dinamica")
+                df_editado = st.data_editor(
+                    df_matriz_freq, 
+                    use_container_width=True, 
+                    key="editor_freq_dinamica",
+                    disabled=["matricula", "nome"] if "nome" in df_matriz_freq.columns else ["matricula"]
+                )
                 
-                if st.button("💾 Guardar Frequências da Matriz"):
+                if st.button("💾 Guardar Frequências na TB_FREQUENCIA"):
+                    gravados = 0
                     for _, row in df_editado.iterrows():
                         mat = row['matricula']
                         for d in lista_datas:
-                            presenca = row[f"Aula: {d}"]
+                            presenca = 1 if row[f"Aula: {d}"] else 0
                             sql_freq = """
                                 INSERT INTO TB_FREQUENCIA (matricula, turma, iduc, data, presente)
                                 VALUES (%s, %s, %s, %s, %s)
                                 ON DUPLICATE KEY UPDATE presente = VALUES(presente)
                             """
                             executar_query(sql_freq, params=(mat, turma_diario, iduc_diario, d, presenca), fetch=False)
-                    st.success("Frequências atualizadas com sucesso no MySQL!")
+                            gravados += 1
+                    st.success(f"Frequências registradas com sucesso na `TB_FREQUENCIA` ({gravados} lançamentos)!")
         except Exception as e:
-            st.error(f"Erro ao carregar matriz de frequências: {e}")
+            st.error(f"Erro ao processar matriz de frequências: {e}")
