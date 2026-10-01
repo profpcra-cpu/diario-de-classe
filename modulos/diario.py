@@ -104,7 +104,6 @@ def renderizar_modulo_diario_frequencia():
         st.markdown("### Registo Pedagógico da Aula Selecionada")
         proc_init, comp_init = "", ""
         
-        # Consulta de registros pedagógicos nas tabelas TB_PROCEDIMENTOS e TB_COMPETENCIAS
         try:
             sql_p = "SELECT texto FROM TB_PROCEDIMENTOS WHERE turma = %s AND iduc = %s AND data = %s LIMIT 1"
             df_p = executar_query(sql_p, params=(turma_diario, iduc_diario, str(nova_data_aula)))
@@ -115,7 +114,7 @@ def renderizar_modulo_diario_frequencia():
             df_c = executar_query(sql_c, params=(turma_diario, iduc_diario, str(nova_data_aula)))
             if not df_c.empty:
                 comp_init = df_c['texto'].iloc[0] or ""
-        except Exception as e_pedagogico:
+        except Exception:
             st.info("Aguardando preenchimento dos registros pedagógicos para esta aula.")
 
         procedimentos = st.text_area("Procedimentos Metodológicos adotados:", value=proc_init, key="txt_proc")
@@ -123,7 +122,6 @@ def renderizar_modulo_diario_frequencia():
         
         if st.button("💾 Guardar Registo Pedagógico"):
             try:
-                # Gravação/Atualização em TB_PROCEDIMENTOS
                 sql_upd_proc = """
                     INSERT INTO TB_PROCEDIMENTOS (turma, iduc, data, texto) 
                     VALUES (%s, %s, %s, %s)
@@ -131,7 +129,6 @@ def renderizar_modulo_diario_frequencia():
                 """
                 executar_query(sql_upd_proc, params=(turma_diario, iduc_diario, str(nova_data_aula), procedimentos), fetch=False)
                 
-                # Gravação/Atualização em TB_COMPETENCIAS
                 sql_upd_comp = """
                     INSERT INTO TB_COMPETENCIAS (turma, iduc, data, texto) 
                     VALUES (%s, %s, %s, %s)
@@ -146,26 +143,23 @@ def renderizar_modulo_diario_frequencia():
     with tab2:
         st.markdown("### Controlo de Presenças")
         try:
-            # Lista de estudantes cadastrados da turma via TB_PESSOAS
+            # Consulta exata na TB_PESSOAS usando matricula, nome e turma
             df_alunos = executar_query(
-                "SELECT matricula, nome FROM TB_PESSOAS WHERE turma = %s AND perfil = 'aluno'", 
+                "SELECT matricula, nome FROM TB_PESSOAS WHERE turma = %s ORDER BY nome", 
                 params=(turma_diario,)
             )
             
             if df_alunos.empty:
-                # Fallback genérico de alunos
-                df_alunos = executar_query("SELECT DISTINCT matricula FROM TB_AVALIACOES WHERE turma = %s", params=(turma_diario,))
-            
-            if df_alunos.empty:
-                st.warning("Nenhum aluno cadastrado encontrado para esta turma.")
+                st.warning("Nenhum aluno cadastrado encontrado para esta turma na tabela `TB_PESSOAS`.")
             else:
-                # Datas de aulas registradas na TB_DIARIO
+                # Busca as datas de aulas cadastradas na TB_DIARIO
                 df_datas = executar_query(
                     "SELECT DISTINCT data FROM TB_DIARIO WHERE turma = %s AND iduc = %s ORDER BY data", 
                     params=(turma_diario, iduc_diario)
                 )
                 lista_datas = df_datas['data'].astype(str).tolist() if not df_datas.empty else [str(nova_data_aula)]
                 
+                # Constrói o DataFrame da matriz de presença
                 df_matriz_freq = df_alunos.copy()
                 for d in lista_datas:
                     df_matriz_freq[f"Aula: {d}"] = True
@@ -174,7 +168,7 @@ def renderizar_modulo_diario_frequencia():
                     df_matriz_freq, 
                     use_container_width=True, 
                     key="editor_freq_dinamica",
-                    disabled=["matricula", "nome"] if "nome" in df_matriz_freq.columns else ["matricula"]
+                    disabled=["matricula", "nome"]
                 )
                 
                 if st.button("💾 Guardar Frequências na TB_FREQUENCIA"):
